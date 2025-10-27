@@ -12,12 +12,13 @@
 - 数据聚合统计：按日/周/月/年聚合使用次数，支持年度总览。
 - 可以配置自定义的手冲用app，并支持多个app来回切换合并计算到一个冲冲行为。
 - 可自定义配置记录阈值：应用切换阈值、有效行为时长阈值。
+- 所有数据本地存储，支持导出和导入。
 
 ## 运行逻辑图 🧠
 ```mermaid
 flowchart LR
     A[聚合结果：ContinuousBehavior 列表<br/>每条含 start,end,totalDuration,sessionCount] --> B{筛选有效行为}
-    B -->|totalDurationSeconds >= 阈值T2| C[有效行为]
+    B -->|totalDurationSeconds >= 有效行为时长阈值| C[有效行为]
     B -->|否则| D[丢弃（统计不计入）]
 
     subgraph 日统计计算

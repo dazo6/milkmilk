@@ -20,6 +20,22 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // 使用 CI Secrets 在构建时为 release 包进行签名（本地无 Secrets 时保持未签名）
+    signingConfigs {
+        val ksFilePath = System.getenv("KEYSTORE_FILE")
+        val ksPass = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+        val alias = System.getenv("ANDROID_KEY_ALIAS")
+        val keyPass = System.getenv("ANDROID_KEY_PASSWORD")
+        if (!ksFilePath.isNullOrEmpty() && !ksPass.isNullOrEmpty() && !alias.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
+            create("release") {
+                storeFile = file(ksFilePath)
+                storePassword = ksPass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -27,6 +43,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // 若存在 release 签名配置，则在 CI 上自动使用该签名
+            val hasReleaseSigning = signingConfigs.findByName("release") != null
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
