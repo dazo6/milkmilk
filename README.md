@@ -1,6 +1,11 @@
 # MilkMilk 🥛
 
+[![visitors](https://visitor-badge.laobi.icu/badge?page_id=dazo6.milkmilk)](https://github.com/dazo66/milkmilk)
+[![Build Status](https://github.com/dazo6/milkmilk/actions/workflows/android-ci.yml/badge.svg?branch=master)](https://github.com/dazo66/milkmilk/actions/workflows/android-ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/dazo6/milkmilk?style=social)](https://github.com/dazo66/milkmilk/stargazers)
+
 <img src="app/src/main/res/icon.png" alt="Milk Milk 图标" width="240" />
+
 
 ## 项目简介 📖
 - Milk Milk 是一个 Android 平台的冲冲记录器。
