@@ -14,8 +14,13 @@ android {
         applicationId = "com.dazo66.milkmilk"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        // 动态版本：优先使用 CI 注入的环境变量
+        val ciVersionName = System.getenv("VERSION_NAME")
+        val ciVersionCodeStr = System.getenv("VERSION_CODE")
+        val ciVersionCode = ciVersionCodeStr?.toIntOrNull()
+
+        versionCode = ciVersionCode ?: 1
+        versionName = ciVersionName ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

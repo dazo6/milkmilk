@@ -52,6 +52,9 @@ jobs:
             assembleDebug
             test
         env:
+          # 动态版本注入：使用 tag 作为 versionName，run_number 作为 versionCode
+          VERSION_NAME: ${{ github.ref_name }}
+          VERSION_CODE: ${{ github.run_number }}
           KEYSTORE_FILE: ${{ runner.temp }}/release.keystore
           ANDROID_KEYSTORE_PASSWORD: ${{ env.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS }}
