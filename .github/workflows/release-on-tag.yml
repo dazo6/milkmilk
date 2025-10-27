@@ -57,6 +57,19 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ env.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ env.ANDROID_KEY_PASSWORD }}
 
+      - name: Rename APKs to desired names
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_DIR="app/build/outputs/apk/release"
+          DEBUG_DIR="app/build/outputs/apk/debug"
+          RELEASE_SRC=$(ls -1 "$RELEASE_DIR"/*.apk | head -n 1)
+          DEBUG_SRC=$(ls -1 "$DEBUG_DIR"/*.apk | head -n 1)
+          echo "Release APK: $RELEASE_SRC"
+          echo "Debug APK: $DEBUG_SRC"
+          cp "$DEBUG_SRC" milkmilk-debug.apk
+          cp "$RELEASE_SRC" milkmilk-release.apk
+
       - name: Create GitHub Release and upload APKs
         uses: softprops/action-gh-release@v1
         with:
@@ -65,8 +78,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
+            milkmilk-release.apk
+            milkmilk-debug.apk
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

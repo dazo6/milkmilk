@@ -43,6 +43,26 @@ class MyAccessibilityService : AccessibilityService() {
         // 切换确认与最小时长阈值
         private const val SWITCH_CONFIRM_MS = 1500L
         private const val MIN_SESSION_SECONDS = 3L
+
+        private val systemPackages = setOf(
+            "com.android.systemui"
+        )
+        private val imePackages = setOf(
+            "com.google.android.inputmethod.latin",
+            "com.samsung.android.honeyboard",
+            "com.baidu.input",
+            "com.tencent.qqpinyin",
+            "com.iflytek.inputmethod",
+            // Sogou 输入法常见包名
+            "com.sohu.inputmethod.sogou",
+            "com.sogou.inputmethod",
+            // 厂商输入法常见包名
+            "com.miui.inputmethod",     // 小米
+            "com.coloros.ime",          // OPPO/ColorOS
+            "com.vivo.ime",             // vivo
+            "com.meizu.inputmethod",    // 魅族
+            "com.huawei.inputmethod"    // 华为
+        )
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Default)
@@ -222,29 +242,38 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                val packageName = event.packageName?.toString() ?: return
+                val rawPkg = event.packageName?.toString() ?: return
                 val className = event.className?.toString() ?: ""
 
-                // 记录最近观测的包名
-                lastObservedPackageName = packageName
+                val activePkg = getActiveWindowPackageName()
+                val rootActivePkg = getRootActiveWindowPackageName()
+                val candidate = when {
+                    activePkg != null && activePkg == rawPkg -> rawPkg
+                    rootActivePkg != null && rootActivePkg == rawPkg -> rawPkg
+                    activePkg != null -> activePkg
+                    rootActivePkg != null -> rootActivePkg
+                    else -> rawPkg
+                }
 
-                if (isLauncher(packageName)) {
-                    // 返回桌面立即截断
+                if (candidate == null) return
+                if (shouldIgnorePackage(candidate)) return
+
+                lastObservedPackageName = candidate
+
+                if (isLauncher(candidate)) {
                     switchConfirmJob?.cancel()
                     logAppSwitch("Home Screen")
                     Log.i(TAG, "返回桌面，结束前台应用会话")
                     handleAppSwitch(null)
                 } else {
-                    // 仅当包名变化时才视为应用切换；同一应用内视图变更不结束会话
                     if (currentForegroundApp == null) {
-                        logAppSwitch("$packageName/$className")
-                        Log.i(TAG, "开始监控应用：$packageName/$className")
-                        handleAppSwitch(packageName)
-                    } else if (packageName != currentForegroundApp) {
-                        // 使用切换确认延迟，避免短暂跳转/浮层导致会话截断
-                        logAppSwitch("$packageName/$className")
-                        Log.i(TAG, "检测到可能的应用切换：$currentForegroundApp -> $packageName/$className，开始确认计时")
-                        pendingSwitchPackageName = packageName
+                        logAppSwitch("$candidate/$className")
+                        Log.i(TAG, "开始监控应用：$candidate/$className")
+                        handleAppSwitch(candidate)
+                    } else if (candidate != currentForegroundApp) {
+                        logAppSwitch("$candidate/$className")
+                        Log.i(TAG, "检测到可能的应用切换：$currentForegroundApp -> $candidate/$className，开始确认计时")
+                        pendingSwitchPackageName = candidate
                         pendingSwitchStart = System.currentTimeMillis()
                         switchConfirmJob?.cancel()
                         switchConfirmJob = serviceScope.launch {
@@ -257,8 +286,31 @@ class MyAccessibilityService : AccessibilityService() {
                             }
                         }
                     } else {
-                        // 同一应用内的视图变化，忽略，不进行会话截断
-                        Log.d(TAG, "同一应用内视图变化，忽略：$packageName/$className")
+                        Log.d(TAG, "同一应用内视图变化，忽略：$candidate/$className")
+                    }
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                val activePkg = getActiveWindowPackageName() ?: getRootActiveWindowPackageName()
+                if (activePkg.isNullOrEmpty()) return
+                if (shouldIgnorePackage(activePkg)) return
+
+                lastObservedPackageName = activePkg
+
+                if (currentForegroundApp == null) {
+                    Log.i(TAG, "开始监控应用：$activePkg")
+                    handleAppSwitch(activePkg)
+                } else if (activePkg != currentForegroundApp) {
+                    Log.i(TAG, "检测到窗口活跃变化：$currentForegroundApp -> $activePkg，开始确认计时")
+                    pendingSwitchPackageName = activePkg
+                    pendingSwitchStart = System.currentTimeMillis()
+                    switchConfirmJob?.cancel()
+                    switchConfirmJob = serviceScope.launch {
+                        delay(SWITCH_CONFIRM_MS)
+                        if (lastObservedPackageName == pendingSwitchPackageName) {
+                            Log.i(TAG, "窗口活跃变化确认成立：$currentForegroundApp -> $pendingSwitchPackageName")
+                            handleAppSwitch(pendingSwitchPackageName)
+                        }
                     }
                 }
             }
@@ -389,6 +441,30 @@ class MyAccessibilityService : AccessibilityService() {
             "com.miui.home",
             "com.huawei.android.launcher"
         )
+    }
+
+    private fun shouldIgnorePackage(pkg: String): Boolean {
+        return pkg in systemPackages || pkg in imePackages || pkg.contains("inputmethod", true)
+    }
+
+    private fun getActiveWindowPackageName(): String? {
+        return try {
+            val ws = windows ?: return null
+            val active = ws.firstOrNull { it.isActive }
+            val root = active?.root
+            root?.packageName?.toString()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun getRootActiveWindowPackageName(): String? {
+        return try {
+            val root = rootInActiveWindow
+            root?.packageName?.toString()
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun logAppSwitch(info: String) {
