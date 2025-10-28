@@ -87,6 +87,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -186,6 +191,97 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     // 时间范围筛选状态
     var timeFilter by mutableStateOf(TimeRangeFilter.TODAY)
+
+    // 更新检查相关状态
+    var updateCheckMessage by mutableStateOf("")
+    var showUpdateDialog by mutableStateOf(false)
+    var latestVersionName by mutableStateOf<String?>(null)
+    var latestReleaseUrl by mutableStateOf<String?>(null)
+
+    fun checkForUpdates() {
+        updateCheckMessage = "正在检查更新…"
+        viewModelScope.launch {
+            try {
+                val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val url = URL("https://api.github.com/repos/dazo6/milkmilk/releases/latest")
+                    val conn = (url.openConnection() as HttpsURLConnection).apply {
+                        requestMethod = "GET"
+                        setRequestProperty("Accept", "application/vnd.github+json")
+                        setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                        setRequestProperty("User-Agent", "milkmilk-android-app")
+                        connectTimeout = 8000
+                        readTimeout = 8000
+                    }
+                    val code = conn.responseCode
+                    val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                    val body = stream.bufferedReader().use(BufferedReader::readText)
+                    conn.disconnect()
+                    if (code !in 200..299) throw RuntimeException("GitHub API 响应码：$code")
+                    val json = JSONObject(body)
+                    val tag = json.optString("tag_name")
+                    val htmlUrl = json.optString("html_url")
+                    Pair(tag, htmlUrl)
+                }
+
+                val latestTag = result.first
+                val releaseUrl = result.second
+                if (latestTag.isNullOrBlank() || releaseUrl.isNullOrBlank()) {
+                    updateCheckMessage = "检查失败：未获取到版本信息"
+                    return@launch
+                }
+
+
+                val current = BuildConfig.VERSION_NAME
+                val cmp = compareVersions(normalizeVersion(current), normalizeVersion(latestTag))
+                if (cmp < 0) {
+                    latestVersionName = latestTag
+                    latestReleaseUrl = releaseUrl
+                    showUpdateDialog = true
+                    updateCheckMessage = "发现新版本：$latestTag"
+                } else {
+                    updateCheckMessage = "当前已是最新版本（$current）"
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "检查更新失败", e)
+                updateCheckMessage = "检查失败：${e.message ?: "未知错误"}"
+            }
+        }
+    }
+
+    fun goToLatestReleasePage() {
+        val url = latestReleaseUrl ?: return
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            showUpdateDialog = false
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "打开更新页面失败", e)
+            updateCheckMessage = "打开更新页面失败：${e.message ?: "未知错误"}"
+        }
+    }
+
+    private fun normalizeVersion(v: String): String {
+        return v.trim().removePrefix("v").removePrefix("V")
+    }
+
+    private fun compareVersions(a: String, b: String): Int {
+        fun parse(s: String): Triple<Int, Int, Int> {
+            val parts = s.split("-", limit = 2)[0].split('.')
+            val x = parts.getOrNull(0)?.toIntOrNull() ?: 0
+            val y = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val z = parts.getOrNull(2)?.toIntOrNull() ?: 0
+            return Triple(x, y, z)
+        }
+        val pa = parse(a)
+        val pb = parse(b)
+        return when {
+            pa.first != pb.first -> pa.first.compareTo(pb.first)
+            pa.second != pb.second -> pa.second.compareTo(pb.second)
+            else -> pa.third.compareTo(pb.third)
+        }
+    }
     private fun getTodayRange(): Pair<Date, Date> {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -1082,41 +1178,8 @@ fun SettingsTab(viewModel: MainViewModel) {
             }
         }
 
-        // 调试功能（仅 Debug 构建显示）
-        if (BuildConfig.DEBUG) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("调试功能", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("开启调试悬浮窗:", modifier = Modifier.weight(1f))
-                        androidx.compose.material3.Switch(
-                            checked = viewModel.debugOverlayEnabled,
-                            onCheckedChange = {
-                                viewModel.debugOverlayEnabled = it
-                                viewModel.saveDebugOverlayEnabled(context)
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
 
-// 会话数据管理（导出/导入）
+        // 会话数据管理（导出/导入）
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1133,50 +1196,50 @@ fun SettingsTab(viewModel: MainViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
-                     ) { uri ->
-                         if (uri != null) {
-                             scope.launch {
-                                 viewModel.importExportMessage = ""
-                                 val ok = viewModel.exportSessionsToUri(uri)
-                                 viewModel.importExportMessage = if (ok) "导出成功：已保存到选择的位置" else "导出失败：无法写入文件"
-                             }
-                         }
-                     }
-                     Button(
-                         onClick = { exportLauncher.launch("sessions_export.json") },
-                         modifier = Modifier.weight(1f)
-                     ) {
-                         Text("导出事件数据")
-                     }
-                     Button(
-                         onClick = {
-                             importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-                         },
-                         modifier = Modifier.weight(1f)
-                     ) {
-                         Text("导入事件数据")
-                     }
-                 }
-                 Spacer(modifier = Modifier.height(8.dp))
-                 Button(
-                     onClick = { viewModel.showClearAllDialog() },
-                     modifier = Modifier.fillMaxWidth(),
-                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                         containerColor = MaterialTheme.colorScheme.error,
-                         contentColor = MaterialTheme.colorScheme.onError
-                     )
-                 ) {
-                     Text("清空全部数据")
-                 }
-                 if (viewModel.importExportMessage.isNotEmpty()) {
-                     Spacer(modifier = Modifier.height(8.dp))
-                     Text(viewModel.importExportMessage)
-                 }
-             }
-         }
+                        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+                    ) { uri ->
+                        if (uri != null) {
+                            scope.launch {
+                                viewModel.importExportMessage = ""
+                                val ok = viewModel.exportSessionsToUri(uri)
+                                viewModel.importExportMessage = if (ok) "导出成功：已保存到选择的位置" else "导出失败：无法写入文件"
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = { exportLauncher.launch("sessions_export.json") },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("导出事件数据")
+                    }
+                    Button(
+                        onClick = {
+                            importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("导入事件数据")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { viewModel.showClearAllDialog() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text("清空全部数据")
+                }
+                if (viewModel.importExportMessage.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(viewModel.importExportMessage)
+                }
+            }
+        }
 
-// 监控应用设置
+        // 监控应用设置
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1236,6 +1299,84 @@ fun SettingsTab(viewModel: MainViewModel) {
                     Text("添加监控应用")
                 }
             }
+        }
+
+        // 版本与更新
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("版本与更新", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("当前版本：${BuildConfig.VERSION_NAME}")
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Button(onClick = { viewModel.checkForUpdates() }) { Text("检查更新") }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    if (viewModel.updateCheckMessage.isNotEmpty()) {
+                        Text(viewModel.updateCheckMessage)
+                    }
+                }
+            }
+        }
+
+
+
+        // 调试功能（仅 Debug 构建显示）
+        if (BuildConfig.DEBUG) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("调试功能", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("开启调试悬浮窗:", modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.debugOverlayEnabled,
+                            onCheckedChange = {
+                                viewModel.debugOverlayEnabled = it
+                                viewModel.saveDebugOverlayEnabled(context)
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+
+        // 更新提示对话框
+        if (viewModel.showUpdateDialog && viewModel.latestVersionName != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.showUpdateDialog = false },
+                title = { Text("发现新版本：${viewModel.latestVersionName}") },
+                text = { Text("当前版本：${BuildConfig.VERSION_NAME}\n是否前往下载更新？") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.goToLatestReleasePage() }) {
+                        Text("去更新")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { viewModel.showUpdateDialog = false }) { Text("忽略此版本") }
+                    }
+                }
+            )
         }
 
         // 应用选择对话框
