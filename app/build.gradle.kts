@@ -42,6 +42,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 若存在 release 签名配置，则在 Debug 也应用该签名
+            val hasReleaseSigning = signingConfigs.findByName("release") != null
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(

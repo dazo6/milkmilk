@@ -136,7 +136,7 @@ private fun isAccessibilityEnabled(activity: ComponentActivity): Boolean {
             activity.getContentResolver(),
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         )
-        return enabledServices != null && enabledServices.contains(serviceName)
+        return enabledServices.contains(serviceName)
     }
     return false
 }

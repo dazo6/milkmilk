@@ -282,7 +282,6 @@ class MyAccessibilityService : AccessibilityService() {
                     else -> rawPkg
                 }
 
-                if (candidate == null) return
                 if (shouldIgnorePackage(candidate)) return
 
                 lastObservedPackageName = candidate
@@ -386,22 +385,6 @@ class MyAccessibilityService : AccessibilityService() {
             info.openCount++
             info.lastOpened = Date(now)
             Log.i(TAG, "开始监控应用会话：$newPackageName，开始时间=${Date(now)}")
-        }
-    }
-
-    private fun analyzeViewHierarchy(rootNode: AccessibilityNodeInfo) {
-        traverseNode(rootNode, 0)
-    }
-
-    private fun traverseNode(node: AccessibilityNodeInfo, depth: Int) {
-        val viewId = node.viewIdResourceName
-        val text = node.text
-
-        (0 until node.childCount).forEach { i ->
-            node.getChild(i)?.also { child ->
-                traverseNode(child, depth + 1)
-                child.recycle()
-            }
         }
     }
 
