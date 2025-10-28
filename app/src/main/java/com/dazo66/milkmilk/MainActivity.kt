@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import com.dazo66.milkmilk.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -274,6 +275,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     var showAppDialog by mutableStateOf(false)
     var threshold1 by mutableIntStateOf(50)
     var threshold2 by mutableIntStateOf(100)
+    var debugOverlayEnabled by mutableStateOf(false)
 
     // 监控的应用列表
     val monitoredApps = mutableStateListOf<AppInfo>()
@@ -369,6 +371,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         // 恢复阈值配置（如果已保存）
         threshold1 = prefs.getInt("threshold1", threshold1)
         threshold2 = prefs.getInt("threshold2", threshold2)
+        debugOverlayEnabled = prefs.getBoolean("debug_overlay_enabled", false)
 
         // 加载已保存的监控应用
         savedApps.forEach { packageName ->
@@ -391,6 +394,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 loadBehaviorStats()
             }
         }
+    }
+
+    fun saveDebugOverlayEnabled(context: Context) {
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("debug_overlay_enabled", debugOverlayEnabled).apply()
     }
 
     // 保存阈值设置
@@ -981,12 +989,18 @@ fun SettingsTab(viewModel: MainViewModel) {
             when (event) {
                 Lifecycle.Event.ON_START -> {
                     isForeground = !isAccessibilityEnabled(activity)
+                    // 记录应用当前处于前台
+                    val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("app_foreground", true).apply()
                     // 这里触发你的状态更新逻辑
                     Log.d("Lifecycle", "应用进入前台")
                 }
 
                 Lifecycle.Event.ON_STOP -> {
                     isForeground = !isAccessibilityEnabled(activity)
+                    // 记录应用当前退到后台
+                    val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("app_foreground", false).apply()
                     Log.d("Lifecycle", "应用退到后台")
                 }
 
@@ -1065,6 +1079,40 @@ fun SettingsTab(viewModel: MainViewModel) {
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        // 调试功能（仅 Debug 构建显示）
+        if (BuildConfig.DEBUG) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("调试功能", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("开启调试悬浮窗:", modifier = Modifier.weight(1f))
+                        androidx.compose.material3.Switch(
+                            checked = viewModel.debugOverlayEnabled,
+                            onCheckedChange = {
+                                viewModel.debugOverlayEnabled = it
+                                viewModel.saveDebugOverlayEnabled(context)
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 

@@ -10,7 +10,15 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.TextView
+import com.dazo66.milkmilk.BuildConfig
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
@@ -78,6 +86,13 @@ class MyAccessibilityService : AccessibilityService() {
     private var pendingSwitchStart: Long = 0L
     private var switchConfirmJob: Job? = null
 
+    // 调试悬浮窗相关
+    private var overlayView: TextView? = null
+    private var windowManager: WindowManager? = null
+    private var overlayAdded: Boolean = false
+    private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "无障碍服务已创建")
@@ -93,6 +108,18 @@ class MyAccessibilityService : AccessibilityService() {
         
         // 加载设置
         loadSettings()
+
+        // 初始化窗口管理器
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        // 监听设置变化以动态开关悬浮窗
+        prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "debug_overlay_enabled" || key == "app_foreground") {
+                ensureOverlayState()
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        ensureOverlayState()
 
     }
 
@@ -346,6 +373,10 @@ class MyAccessibilityService : AccessibilityService() {
         // 更新当前应用
         currentForegroundApp = newPackageName
         appStartTime = now
+
+        // 更新调试悬浮窗文案并确保显示状态
+        updateOverlayText(newPackageName)
+        ensureOverlayState()
         
         // 如果是监控的应用，记录打开次数和最后打开时间
         if (newPackageName != null && monitoredApps.contains(newPackageName)) {
@@ -431,6 +462,95 @@ class MyAccessibilityService : AccessibilityService() {
         Log.d(TAG, "无障碍服务被销毁")
         trackingJob?.cancel()
         saveAppUsageData()
+        // 清理悬浮窗监听与视图
+        prefsListener?.let { prefs.unregisterOnSharedPreferenceChangeListener(it) }
+        removeOverlay()
+    }
+
+    private fun isOverlayEnabled(): Boolean {
+        // 仅在 Debug 构建允许悬浮窗
+        return BuildConfig.DEBUG && prefs.getBoolean("debug_overlay_enabled", false)
+    }
+
+    private fun isAppInForeground(): Boolean {
+        return prefs.getBoolean("app_foreground", true)
+    }
+
+    private fun ensureOverlayState() {
+        if (isOverlayEnabled() && !isAppInForeground()) {
+            addOverlayIfNeeded()
+        } else {
+            removeOverlay()
+        }
+    }
+
+    private fun addOverlayIfNeeded() {
+        if (overlayAdded) return
+        mainHandler.post {
+            if (overlayAdded) return@post
+            try {
+                val tv = TextView(this)
+                tv.text = "当前前台: 未知"
+                tv.setTextColor(Color.WHITE)
+                tv.textSize = 12f
+                tv.setPadding(12, 8, 12, 8)
+                tv.setBackgroundColor(Color.parseColor("#80000000"))
+
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT
+                )
+                params.gravity = Gravity.TOP or Gravity.END
+                params.x = 24
+                params.y = 120
+
+                windowManager?.addView(tv, params)
+                overlayView = tv
+                overlayAdded = true
+                Log.d(TAG, "调试悬浮窗已添加")
+            } catch (e: Exception) {
+                Log.e(TAG, "添加调试悬浮窗失败: ${e.message}")
+            }
+        }
+    }
+
+    private fun removeOverlay() {
+        if (!overlayAdded) return
+        mainHandler.post {
+            if (!overlayAdded) return@post
+            try {
+                overlayView?.let { windowManager?.removeView(it) }
+                overlayView = null
+                overlayAdded = false
+                Log.d(TAG, "调试悬浮窗已移除")
+            } catch (e: Exception) {
+                Log.e(TAG, "移除调试悬浮窗失败: ${e.message}")
+            }
+        }
+    }
+
+    private fun updateOverlayText(packageName: String?) {
+        mainHandler.post {
+            val tv = overlayView ?: return@post
+            val text = try {
+                if (packageName.isNullOrBlank()) {
+                    "当前前台: 未知"
+                } else {
+                    val appName = packageManager.getApplicationLabel(
+                        packageManager.getApplicationInfo(packageName, 0)
+                    ).toString()
+                    "当前前台: ${appName} (${packageName})"
+                }
+            } catch (e: Exception) {
+                "当前前台: ${packageName ?: "未知"}"
+            }
+            tv.text = text
+        }
     }
 
     private fun isLauncher(packageName: String): Boolean {
