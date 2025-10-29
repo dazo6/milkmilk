@@ -10,7 +10,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import com.dazo66.milkmilk.BuildConfig
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,9 +21,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
@@ -61,7 +60,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -74,9 +72,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import androidx.paging.PagingData
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.dazo66.milkmilk.service.AppMonitorService
@@ -89,12 +87,11 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.net.ssl.HttpsURLConnection
 
 
 class MainActivity : ComponentActivity() {
@@ -102,9 +99,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 检查并请求必要权限
+        // 检查并请求必要权限（仅使用情况访问，不在启动时检查无障碍）
         checkUsageAccessPermission(this)
-        checkAccessibilityEnabled(this)
 
         // 启动监控服务
         AppMonitorService.startService(this)
@@ -124,16 +120,16 @@ class MainActivity : ComponentActivity() {
 
 
 private fun isAccessibilityEnabled(activity: ComponentActivity): Boolean {
-    val serviceName: String = activity.getPackageName() + ".MyAccessibilityService"
+    val serviceName: String = activity.packageName + ".MyAccessibilityService"
     val enabled: Int = Settings.Secure.getInt(
-        activity.getContentResolver(),
+        activity.contentResolver,
         Settings.Secure.ACCESSIBILITY_ENABLED,
         0
     )
-    Log.i("isAccessibilityEnabled", enabled.toString());
+    Log.i("isAccessibilityEnabled", enabled.toString())
     if (enabled == 1) {
         val enabledServices: String = Settings.Secure.getString(
-            activity.getContentResolver(),
+            activity.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         )
         return enabledServices.contains(serviceName)
@@ -274,6 +270,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val z = parts.getOrNull(2)?.toIntOrNull() ?: 0
             return Triple(x, y, z)
         }
+
         val pa = parse(a)
         val pb = parse(b)
         return when {
@@ -282,6 +279,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             else -> pa.third.compareTo(pb.third)
         }
     }
+
     private fun getTodayRange(): Pair<Date, Date> {
         val calendar = java.util.Calendar.getInstance()
         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -510,32 +508,32 @@ class MainViewModel(private val context: Context) : ViewModel() {
     // 加载行为统计数据
     fun loadBehaviorStats() {
         // 加载统计范围：从“上一年年初”到“当前日期”，确保月视图跨两年时上一年所有月份都有统计
-         val now = java.util.Calendar.getInstance()
-         val startCal = java.util.Calendar.getInstance()
-         startCal.set(java.util.Calendar.YEAR, now.get(java.util.Calendar.YEAR) - 1)
-         startCal.set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY)
-         startCal.set(java.util.Calendar.DAY_OF_MONTH, 1)
-         startCal.set(java.util.Calendar.HOUR_OF_DAY, 0)
-         startCal.set(java.util.Calendar.MINUTE, 0)
-         startCal.set(java.util.Calendar.SECOND, 0)
-         startCal.set(java.util.Calendar.MILLISECOND, 0)
-         val startDate = startCal.time
-         val endDate = now.time
- 
-         val monitoredPackages = monitoredApps.map { it.packageName }
- 
-         // 使用协程加载数据（IO线程），主线程仅回写状态
-         viewModelScope.launch {
-             try {
-                 val minSeconds = threshold2.toLong()
-                 val stats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                     repository.getDailyBehaviorStatsFromAggregated(startDate, endDate, minSeconds)
-                 }
-                 dailyBehaviorStats = stats
-             } catch (e: Exception) {
-                 Log.e("MainViewModel", "加载行为统计数据失败", e)
-             }
-         }
+        val now = java.util.Calendar.getInstance()
+        val startCal = java.util.Calendar.getInstance()
+        startCal.set(java.util.Calendar.YEAR, now.get(java.util.Calendar.YEAR) - 1)
+        startCal.set(java.util.Calendar.MONTH, java.util.Calendar.JANUARY)
+        startCal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+        startCal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        startCal.set(java.util.Calendar.MINUTE, 0)
+        startCal.set(java.util.Calendar.SECOND, 0)
+        startCal.set(java.util.Calendar.MILLISECOND, 0)
+        val startDate = startCal.time
+        val endDate = now.time
+
+        val monitoredPackages = monitoredApps.map { it.packageName }
+
+        // 使用协程加载数据（IO线程），主线程仅回写状态
+        viewModelScope.launch {
+            try {
+                val minSeconds = threshold2.toLong()
+                val stats = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repository.getDailyBehaviorStatsFromAggregated(startDate, endDate, minSeconds)
+                }
+                dailyBehaviorStats = stats
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "加载行为统计数据失败", e)
+            }
+        }
     }
 
     // 新增：应用打开时的增量刷新（超过3分钟）并记录最近打开时间
@@ -546,7 +544,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
         val diffMillis = nowMillis - lastOpenMillis
         val threeMinutesMillis = 3 * 60 * 1000L
         if (lastOpenMillis == 0L || diffMillis >= threeMinutesMillis) {
-            val lastOpenDate = if (lastOpenMillis == 0L) java.util.Date(nowMillis) else java.util.Date(lastOpenMillis)
+            val lastOpenDate =
+                if (lastOpenMillis == 0L) Date(nowMillis) else Date(
+                    lastOpenMillis
+                )
             val monitoredPkgs = monitoredApps.map { it.packageName }
             viewModelScope.launch {
                 try {
@@ -571,7 +572,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
     // 新增：首页手动下拉触发的增量刷新
     fun manualIncrementalRefresh(onDone: (() -> Unit)? = null) {
         val monitoredPkgs = monitoredApps.map { it.packageName }
-        val now = java.util.Date()
+        val now = Date()
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         viewModelScope.launch {
             try {
@@ -584,12 +585,15 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 // 刷新统计视图
                 loadBehaviorStats()
                 // 记录最近打开时间
-                prefs.edit().putLong("last_open_time", java.util.Calendar.getInstance().timeInMillis).apply()
+                prefs.edit()
+                    .putLong("last_open_time", java.util.Calendar.getInstance().timeInMillis)
+                    .apply()
                 onDone?.invoke()
             }
         }
     }
-    fun onDayClick(date: java.util.Date, count: Int) {
+
+    fun onDayClick(date: Date, count: Int) {
         selectedDate = date
         selectedDayCount = count
         showDayDetailDialog = true
@@ -671,7 +675,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.getAllRecordsDirect() }
         val jsonArray = org.json.JSONArray()
         records.forEach { r ->
-            val obj = org.json.JSONObject()
+            val obj = JSONObject()
             obj.put("packageName", r.packageName)
             obj.put("appName", r.appName)
             obj.put("startTime", r.startTime.time)
@@ -685,14 +689,15 @@ class MainViewModel(private val context: Context) : ViewModel() {
         file.writeText(jsonArray.toString())
         return file.absolutePath
     }
- 
+
     // 导出会话数据到用户自选位置（SAF Uri）
     suspend fun exportSessionsToUri(uri: android.net.Uri): Boolean {
         return try {
-            val records = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.getAllRecordsDirect() }
+            val records =
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.getAllRecordsDirect() }
             val jsonArray = org.json.JSONArray()
             records.forEach { r ->
-                val obj = org.json.JSONObject()
+                val obj = JSONObject()
                 obj.put("packageName", r.packageName)
                 obj.put("appName", r.appName)
                 obj.put("startTime", r.startTime.time)
@@ -709,48 +714,48 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-     // 从外部文件目录导入会话数据（sessions_export.json），检测时间重叠
-     suspend fun importSessionsFromFile(): Pair<Int, Int> {
-         val dir = context.getExternalFilesDir(null) ?: context.filesDir
-         val file = java.io.File(dir, "sessions_export.json")
-         if (!file.exists()) return 0 to 0
-         val text = file.readText()
-         val arr = org.json.JSONArray(text)
-         var success = 0
-         var fail = 0
-         for (i in 0 until arr.length()) {
-             val o = arr.getJSONObject(i)
-             val record = AppUsageRecord(
-                 packageName = o.getString("packageName"),
-                 appName = o.getString("appName"),
-                 startTime = java.util.Date(o.getLong("startTime")),
-                 endTime = java.util.Date(o.getLong("endTime")),
-                 durationSeconds = o.getLong("durationSeconds"),
-                 date = java.util.Date(o.getLong("date"))
-             )
-             val overlap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                 repository.hasOverlap(
-                     record.startTime,
-                     record.endTime
-                 )
-             }
-             if (overlap) {
-                 fail++
-             } else {
-                 try {
-                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                         repository.insertUsageRecord(
-                             record
-                         )
-                     }
-                     success++
-                 } catch (e: Exception) {
-                     fail++
-                 }
-             }
-         }
-         return success to fail
-     }
+    // 从外部文件目录导入会话数据（sessions_export.json），检测时间重叠
+    suspend fun importSessionsFromFile(): Pair<Int, Int> {
+        val dir = context.getExternalFilesDir(null) ?: context.filesDir
+        val file = java.io.File(dir, "sessions_export.json")
+        if (!file.exists()) return 0 to 0
+        val text = file.readText()
+        val arr = org.json.JSONArray(text)
+        var success = 0
+        var fail = 0
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val record = AppUsageRecord(
+                packageName = o.getString("packageName"),
+                appName = o.getString("appName"),
+                startTime = Date(o.getLong("startTime")),
+                endTime = Date(o.getLong("endTime")),
+                durationSeconds = o.getLong("durationSeconds"),
+                date = Date(o.getLong("date"))
+            )
+            val overlap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                repository.hasOverlap(
+                    record.startTime,
+                    record.endTime
+                )
+            }
+            if (overlap) {
+                fail++
+            } else {
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        repository.insertUsageRecord(
+                            record
+                        )
+                    }
+                    success++
+                } catch (e: Exception) {
+                    fail++
+                }
+            }
+        }
+        return success to fail
+    }
 
     // 通过文件选择器的Uri导入会话数据
     suspend fun importSessionsFromUri(uri: android.net.Uri): Pair<Int, Int> {
@@ -764,10 +769,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
             val record = AppUsageRecord(
                 packageName = o.getString("packageName"),
                 appName = o.getString("appName"),
-                startTime = java.util.Date(o.getLong("startTime")),
-                endTime = java.util.Date(o.getLong("endTime")),
+                startTime = Date(o.getLong("startTime")),
+                endTime = Date(o.getLong("endTime")),
                 durationSeconds = o.getLong("durationSeconds"),
-                date = java.util.Date(o.getLong("date"))
+                date = Date(o.getLong("date"))
             )
             val overlap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 repository.hasOverlap(
@@ -869,7 +874,7 @@ fun Greeting(name: String, modifier: Modifier = Modifier, viewModel: MainViewMod
 
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     // 应用从后台恢复时：如果距离上次打开超过3分钟，触发增量刷新
     DisposableEffect(lifecycleOwner) {
@@ -904,12 +909,12 @@ fun Greeting(name: String, modifier: Modifier = Modifier, viewModel: MainViewMod
 
         // 页面内容
         HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
-             when (page) {
-                 0 -> StatisticsTab(vm)
-                 +1 -> EventListTab(vm)
-                 2 -> SettingsTab(vm)
-             }
-         }
+            when (page) {
+                0 -> StatisticsTab(vm)
+                +1 -> EventListTab(vm)
+                2 -> SettingsTab(vm)
+            }
+        }
     }
 
 }
@@ -1007,23 +1012,23 @@ fun EventListTabLegacy(viewModel: MainViewModel) {
         }
     }
 
-/*    // 显示删除结果消息
-    if (viewModel.deleteMessage.isNotEmpty()) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = viewModel.deleteMessage,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
+    /*    // 显示删除结果消息
+        if (viewModel.deleteMessage.isNotEmpty()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = viewModel.deleteMessage,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-        }
-    }*/
+        }*/
 }
 
 // Factory for ViewModel
@@ -1057,7 +1062,7 @@ fun SettingsTab(viewModel: MainViewModel) {
     val context = LocalContext.current
     val activity = context as ComponentActivity
     // 获取当前 Activity 的生命周期
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     // 用于更新按钮
     var isForeground by remember { mutableStateOf(false) }
     // 导出/导入所需协程与消息
@@ -1110,9 +1115,11 @@ fun SettingsTab(viewModel: MainViewModel) {
         }
     }
 
-    Column(modifier = Modifier
-        .padding(16.dp)
-        .verticalScroll(rememberScrollState())) {
+    Column(
+        modifier = Modifier
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
         // 无障碍服务设置
         Card(
             modifier = Modifier
@@ -1195,17 +1202,21 @@ fun SettingsTab(viewModel: MainViewModel) {
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
-                    ) { uri ->
-                        if (uri != null) {
-                            scope.launch {
-                                viewModel.importExportMessage = ""
-                                val ok = viewModel.exportSessionsToUri(uri)
-                                viewModel.importExportMessage = if (ok) "导出成功：已保存到选择的位置" else "导出失败：无法写入文件"
+                    val exportLauncher =
+                        androidx.activity.compose.rememberLauncherForActivityResult(
+                            androidx.activity.result.contract.ActivityResultContracts.CreateDocument(
+                                "application/json"
+                            )
+                        ) { uri ->
+                            if (uri != null) {
+                                scope.launch {
+                                    viewModel.importExportMessage = ""
+                                    val ok = viewModel.exportSessionsToUri(uri)
+                                    viewModel.importExportMessage =
+                                        if (ok) "导出成功：已保存到选择的位置" else "导出失败：无法写入文件"
+                                }
                             }
                         }
-                    }
                     Button(
                         onClick = { exportLauncher.launch("sessions_export.json") },
                         modifier = Modifier.weight(1f)
@@ -1324,7 +1335,6 @@ fun SettingsTab(viewModel: MainViewModel) {
         }
 
 
-
         // 调试功能（仅 Debug 构建显示）
         if (BuildConfig.DEBUG) {
             Card(
@@ -1351,7 +1361,7 @@ fun SettingsTab(viewModel: MainViewModel) {
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
+                        "需要无障碍权限，开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1373,7 +1383,9 @@ fun SettingsTab(viewModel: MainViewModel) {
                 },
                 dismissButton = {
                     Row {
-                        TextButton(onClick = { viewModel.showUpdateDialog = false }) { Text("忽略此版本") }
+                        TextButton(onClick = {
+                            viewModel.showUpdateDialog = false
+                        }) { Text("忽略此版本") }
                     }
                 }
             )
@@ -1437,23 +1449,23 @@ fun SettingsTab(viewModel: MainViewModel) {
             )
         }
 
-/*        // 显示删除结果消息
-        if (viewModel.deleteMessage.isNotEmpty()) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = viewModel.deleteMessage,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }*/
+        /*        // 显示删除结果消息
+                if (viewModel.deleteMessage.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = viewModel.deleteMessage,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }*/
     }
 }
 
@@ -1484,66 +1496,66 @@ fun EventListTab(viewModel: MainViewModel) {
             title = { Text("确认删除") },
             text = { Text("确定要删除这条会话记录吗？") },
             confirmButton = {
-                androidx.compose.material3.TextButton(
+                TextButton(
                     onClick = {
                         coroutineScope.launch { viewModel.deleteRecord() }
                     }
                 ) { Text("删除") }
             },
             dismissButton = {
-                androidx.compose.material3.TextButton(onClick = { viewModel.cancelDelete() }) {
+                TextButton(onClick = { viewModel.cancelDelete() }) {
                     Text("取消")
                 }
             }
         )
     }
 
-    Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
         // 顶部时间筛选
         Row(
-            modifier = androidx.compose.ui.Modifier
+            modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically
         ) {
             val selected = viewModel.timeFilter
-            androidx.compose.material3.TextButton(onClick = {
+            TextButton(onClick = {
                 viewModel.updateTimeFilter(
                     MainViewModel.TimeRangeFilter.TODAY
                 )
             }) {
                 val color =
-                    if (selected == MainViewModel.TimeRangeFilter.TODAY) MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                    if (selected == MainViewModel.TimeRangeFilter.TODAY) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 Text("今天", color = color)
             }
-            Spacer(modifier = androidx.compose.ui.Modifier.width(8.dp))
-            androidx.compose.material3.TextButton(onClick = {
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(onClick = {
                 viewModel.updateTimeFilter(
                     MainViewModel.TimeRangeFilter.WEEK
                 )
             }) {
                 val color =
-                    if (selected == MainViewModel.TimeRangeFilter.WEEK) MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                    if (selected == MainViewModel.TimeRangeFilter.WEEK) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 Text("本周", color = color)
             }
-            Spacer(modifier = androidx.compose.ui.Modifier.width(8.dp))
-            androidx.compose.material3.TextButton(onClick = {
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(onClick = {
                 viewModel.updateTimeFilter(
                     MainViewModel.TimeRangeFilter.MONTH
                 )
             }) {
                 val color =
-                    if (selected == MainViewModel.TimeRangeFilter.MONTH) MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                    if (selected == MainViewModel.TimeRangeFilter.MONTH) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 Text("本月", color = color)
             }
-            Spacer(modifier = androidx.compose.ui.Modifier.width(8.dp))
-            androidx.compose.material3.TextButton(onClick = {
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(onClick = {
                 viewModel.updateTimeFilter(
                     MainViewModel.TimeRangeFilter.ALL
                 )
             }) {
                 val color =
-                    if (selected == MainViewModel.TimeRangeFilter.ALL) MaterialTheme.colorScheme.primary else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                    if (selected == MainViewModel.TimeRangeFilter.ALL) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 Text("全部", color = color)
             }
         }
@@ -1552,26 +1564,26 @@ fun EventListTab(viewModel: MainViewModel) {
         when (val state = lazyItems.loadState.refresh) {
             is androidx.paging.LoadState.Loading -> {
                 Column(
-                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
                 ) {
                     androidx.compose.material3.CircularProgressIndicator()
-                    Spacer(modifier = androidx.compose.ui.Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text("正在加载…")
                 }
             }
 
             is androidx.paging.LoadState.Error -> {
                 Column(
-                    modifier = androidx.compose.ui.Modifier
+                    modifier = Modifier
                         .fillMaxSize()
                         .padding(16.dp),
-                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("加载失败：${state.error.message ?: "未知错误"}")
-                    Spacer(modifier = androidx.compose.ui.Modifier.height(8.dp))
-                    androidx.compose.material3.Button(onClick = { lazyItems.retry() }) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { lazyItems.retry() }) {
                         Text(
                             "重试"
                         )
@@ -1580,48 +1592,48 @@ fun EventListTab(viewModel: MainViewModel) {
             }
 
             else -> {
-                androidx.compose.foundation.lazy.LazyColumn(
-                    modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     items(lazyItems.itemCount) { index ->
                         val record = lazyItems[index]
                         if (record != null) {
-                            androidx.compose.material3.Card(
-                                modifier = androidx.compose.ui.Modifier
+                            Card(
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(8.dp),
-                                colors = androidx.compose.material3.CardDefaults.cardColors(
-                                    containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                                 )
                             ) {
-                                Column(modifier = androidx.compose.ui.Modifier.padding(12.dp)) {
+                                Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
                                         text = record.appName,
-                                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(modifier = androidx.compose.ui.Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = "发生日期：${dateFormatter.format(record.date)}",
-                                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = androidx.compose.ui.Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "开始时间：${timeFormatter.format(record.startTime)}",
-                                        color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Spacer(modifier = androidx.compose.ui.Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     val durSec = record.durationSeconds.toInt()
                                     Row(
-                                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             text = "会话时长：${durSec / 60}分${durSec % 60}秒",
-                                            color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = androidx.compose.ui.Modifier.weight(1f)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f)
                                         )
-                                        androidx.compose.material3.TextButton(onClick = {
+                                        TextButton(onClick = {
                                             viewModel.recordToDelete = record
                                             viewModel.showDeleteConfirmDialog = true
                                         }) { Text("删除") }
@@ -1635,33 +1647,33 @@ fun EventListTab(viewModel: MainViewModel) {
                     item {
                         if (lazyItems.loadState.append is androidx.paging.LoadState.NotLoading) {
                             androidx.compose.foundation.layout.Box(
-                                modifier = androidx.compose.ui.Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
+                                contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = "已经到最后了",
-                                    color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         } else if (lazyItems.loadState.append is androidx.paging.LoadState.Loading) {
                             androidx.compose.foundation.layout.Box(
-                                modifier = androidx.compose.ui.Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
+                                contentAlignment = Alignment.Center
                             ) {
                                 androidx.compose.material3.CircularProgressIndicator()
                             }
                         } else if (lazyItems.loadState.append is androidx.paging.LoadState.Error) {
                             androidx.compose.foundation.layout.Box(
-                                modifier = androidx.compose.ui.Modifier
+                                modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(16.dp),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
+                                contentAlignment = Alignment.Center
                             ) {
-                                androidx.compose.material3.TextButton(onClick = { lazyItems.retry() }) {
+                                TextButton(onClick = { lazyItems.retry() }) {
                                     Text("加载更多失败，重试")
                                 }
                             }

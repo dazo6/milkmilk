@@ -63,7 +63,8 @@ class BehaviorAggregationService(private val context: Context) {
                     currentSourceIds.clear()
                     currentSourceIds.add(record.id)
                 } else {
-                    val gapSeconds = (record.startTime.time - (lastEndTime?.time ?: currentBehaviorEnd!!.time)) / 1000
+                    val gapSeconds = (record.startTime.time - (lastEndTime?.time
+                        ?: currentBehaviorEnd!!.time)) / 1000
                     if (gapSeconds <= cfg.threshold1Seconds) {
                         // 继续同一连续行为
                         if (record.endTime.time > currentBehaviorEnd!!.time) {
@@ -73,15 +74,21 @@ class BehaviorAggregationService(private val context: Context) {
                         currentSourceIds.add(record.id)
                     } else {
                         // 收尾上一个行为
-                        val duration = (currentBehaviorEnd!!.time - currentBehaviorStart!!.time) / 1000
+                        val duration =
+                            (currentBehaviorEnd!!.time - currentBehaviorStart.time) / 1000
                         val behavior = ContinuousBehavior(
-                            startTime = currentBehaviorStart!!,
-                            endTime = currentBehaviorEnd!!,
+                            startTime = currentBehaviorStart,
+                            endTime = currentBehaviorEnd,
                             totalDurationSeconds = duration,
-                            date = getTodayDate(currentBehaviorStart!!),
+                            date = getTodayDate(currentBehaviorStart),
                             sessionCount = currentSessionCount
                         )
-                        results.add(AggregatedBehaviorWithSources(behavior, currentSourceIds.toList()))
+                        results.add(
+                            AggregatedBehaviorWithSources(
+                                behavior,
+                                currentSourceIds.toList()
+                            )
+                        )
 
                         // 开启新的行为
                         currentBehaviorStart = record.startTime
@@ -128,7 +135,11 @@ class BehaviorAggregationService(private val context: Context) {
             val records = if (monitoredPackages.isEmpty()) {
                 appUsageDao.getUsageRecordsForAggregation(startDate, endDate)
             } else {
-                appUsageDao.getMonitoredUsageRecordsForAggregation(monitoredPackages, startDate, endDate)
+                appUsageDao.getMonitoredUsageRecordsForAggregation(
+                    monitoredPackages,
+                    startDate,
+                    endDate
+                )
             }
 
             if (records.isEmpty()) {
@@ -143,7 +154,8 @@ class BehaviorAggregationService(private val context: Context) {
 
             for (record in records) {
                 // 监控列表为空：包含所有记录；否则只包含监控应用记录
-                val includeRecord = monitoredPackages.isEmpty() || monitoredPackages.contains(record.packageName)
+                val includeRecord =
+                    monitoredPackages.isEmpty() || monitoredPackages.contains(record.packageName)
                 if (!includeRecord) continue
 
                 if (currentBehaviorStart == null) {
@@ -151,7 +163,8 @@ class BehaviorAggregationService(private val context: Context) {
                     currentBehaviorEnd = record.endTime
                     currentSessionCount = 1
                 } else {
-                    val gapSeconds = (record.startTime.time - (lastEndTime?.time ?: currentBehaviorEnd!!.time)) / 1000
+                    val gapSeconds = (record.startTime.time - (lastEndTime?.time
+                        ?: currentBehaviorEnd!!.time)) / 1000
                     if (gapSeconds <= cfg.threshold1Seconds) {
                         // 继续聚合
                         if (record.endTime.time > currentBehaviorEnd!!.time) {
@@ -160,13 +173,14 @@ class BehaviorAggregationService(private val context: Context) {
                         currentSessionCount += 1
                     } else {
                         // 收尾处理
-                        val duration = (currentBehaviorEnd!!.time - currentBehaviorStart!!.time) / 1000
+                        val duration =
+                            (currentBehaviorEnd!!.time - currentBehaviorStart.time) / 1000
                         behaviors.add(
                             ContinuousBehavior(
-                                startTime = currentBehaviorStart!!,
-                                endTime = currentBehaviorEnd!!,
+                                startTime = currentBehaviorStart,
+                                endTime = currentBehaviorEnd,
                                 totalDurationSeconds = duration,
-                                date = getTodayDate(currentBehaviorStart!!),
+                                date = getTodayDate(currentBehaviorStart),
                                 sessionCount = currentSessionCount
                             )
                         )

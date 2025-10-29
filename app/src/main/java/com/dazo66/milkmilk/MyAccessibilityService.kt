@@ -4,35 +4,26 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.graphics.Color
-import android.graphics.PixelFormat
 import android.view.Gravity
 import android.view.WindowManager
-import android.widget.TextView
-import com.dazo66.milkmilk.BuildConfig
 import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityNodeInfo
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import com.dazo66.milkmilk.notification.NotificationHelper
+import android.widget.TextView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
-import java.util.Calendar
 
 // MyAccessibilityService.kt
 class MyAccessibilityService : AccessibilityService() {
@@ -41,10 +32,10 @@ class MyAccessibilityService : AccessibilityService() {
         private const val TAG = "MyAccessibilityService"
         private const val NOTIFICATION_CHANNEL_ID = "app_usage_channel"
         private const val NOTIFICATION_ID = 1001
-        
+
         // 共享数据，可以在服务和Activity之间共享
         val appUsageData = ConcurrentHashMap<String, AppUsageInfo>()
-        
+
         // 监听的应用列表
         val monitoredApps = mutableSetOf<String>()
 
@@ -79,7 +70,7 @@ class MyAccessibilityService : AccessibilityService() {
     private var appStartTime: Long = 0
     private lateinit var prefs: SharedPreferences
     private lateinit var repository: AppUsageRepository
-    
+
     // 观测与待确认切换状态（用于防抖与确认）
     private var lastObservedPackageName: String? = null
     private var pendingSwitchPackageName: String? = null
@@ -96,16 +87,16 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "无障碍服务已创建")
-        
+
         // 创建通知渠道
         createNotificationChannel()
-        
+
         // 初始化SharedPreferences
         prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        
+
         // 初始化数据库仓库
         repository = AppUsageRepository(this)
-        
+
         // 加载设置
         loadSettings()
 
@@ -124,20 +115,21 @@ class MyAccessibilityService : AccessibilityService() {
     }
 
     private fun currentConfig(): BehaviorAggregationConfig {
-        val prefs = getApplicationContext().getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        val prefs =
+            applicationContext.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         val t1 = prefs.getInt("threshold1", 50).toLong()
         val t2 = prefs.getInt("threshold2", 100).toLong()
         return BehaviorAggregationConfig(threshold1Seconds = t1, threshold2Seconds = t2)
     }
 
     private fun loadSettings() {
-        
+
         // 加载监听的应用列表
         prefs.getStringSet("monitored_apps", setOf())?.let {
             monitoredApps.clear()
             monitoredApps.addAll(it)
         }
-        
+
         // 加载已保存的使用数据
         val savedData = prefs.all.filter { it.key.startsWith("app_") }
         savedData.forEach { (key, value) ->
@@ -170,8 +162,13 @@ class MyAccessibilityService : AccessibilityService() {
         }
         editor.apply()
     }
-    
-    private fun saveUsageRecordToDatabase(packageName: String, startTime: Long, endTime: Long, durationSeconds: Long) {
+
+    private fun saveUsageRecordToDatabase(
+        packageName: String,
+        startTime: Long,
+        endTime: Long,
+        durationSeconds: Long
+    ) {
         serviceScope.launch {
             try {
                 // 获取应用名称
@@ -182,25 +179,25 @@ class MyAccessibilityService : AccessibilityService() {
                 } catch (e: Exception) {
                     packageName
                 }
-                
+
                 // 创建使用记录
                 val repository = AppUsageRepository(this@MyAccessibilityService)
                 val record = AppUsageRecord(
                     packageName = packageName,
                     appName = appName,
-                    startTime = java.util.Date(startTime),
-                    endTime = java.util.Date(endTime),
+                    startTime = Date(startTime),
+                    endTime = Date(endTime),
                     durationSeconds = durationSeconds,
-                    date = java.util.Date(endTime)
+                    date = Date(endTime)
                 )
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                     try {
                         repository.insertUsageRecord(record)
                         // 新增实时数据后执行3天窗口增量更新（取7天事件）
-                        val monitoredPackages = MyAccessibilityService.monitoredApps.toList()
+                        val monitoredPackages = monitoredApps.toList()
                         repository.incrementalUpdateAround(record.startTime, monitoredPackages)
                     } catch (e: Exception) {
-                        android.util.Log.e("MyAccessibilityService", "保存会话记录失败", e)
+                        Log.e("MyAccessibilityService", "保存会话记录失败", e)
                     }
                 }
                 Log.i(TAG, "统计数据落库成功：$appName，会话时长${durationSeconds}秒")
@@ -209,7 +206,7 @@ class MyAccessibilityService : AccessibilityService() {
             }
         }
     }
-    
+
     private fun getTodayDate(): Date {
         val calendar = Calendar.getInstance()
         calendar.set(Calendar.HOUR_OF_DAY, 0)
@@ -222,16 +219,16 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.d(TAG, "无障碍服务已连接")
-        
+
         // 配置无障碍服务
         val info = serviceInfo
-        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or 
-                          AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         info.notificationTimeout = 100
         info.flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         serviceInfo = info
-        
+
         // 启动应用追踪
         startAppTracking()
     }
@@ -247,7 +244,7 @@ class MyAccessibilityService : AccessibilityService() {
                             AppUsageInfo(packageName)
                         }
                         info.totalTimeInForeground += 1
-                        
+
                         // 检查是否达到阈值
                         checkThresholds(info)
                     }
@@ -298,17 +295,26 @@ class MyAccessibilityService : AccessibilityService() {
                         handleAppSwitch(candidate)
                     } else if (candidate != currentForegroundApp) {
                         logAppSwitch("$candidate/$className")
-                        Log.i(TAG, "检测到可能的应用切换：$currentForegroundApp -> $candidate/$className，开始确认计时")
+                        Log.i(
+                            TAG,
+                            "检测到可能的应用切换：$currentForegroundApp -> $candidate/$className，开始确认计时"
+                        )
                         pendingSwitchPackageName = candidate
                         pendingSwitchStart = System.currentTimeMillis()
                         switchConfirmJob?.cancel()
                         switchConfirmJob = serviceScope.launch {
                             delay(SWITCH_CONFIRM_MS)
                             if (lastObservedPackageName == pendingSwitchPackageName) {
-                                Log.i(TAG, "应用切换确认成立：$currentForegroundApp -> $pendingSwitchPackageName")
+                                Log.i(
+                                    TAG,
+                                    "应用切换确认成立：$currentForegroundApp -> $pendingSwitchPackageName"
+                                )
                                 handleAppSwitch(pendingSwitchPackageName)
                             } else {
-                                Log.i(TAG, "应用切换确认失败，忽略：期望=$pendingSwitchPackageName 实际=$lastObservedPackageName")
+                                Log.i(
+                                    TAG,
+                                    "应用切换确认失败，忽略：期望=$pendingSwitchPackageName 实际=$lastObservedPackageName"
+                                )
                             }
                         }
                     } else {
@@ -316,6 +322,7 @@ class MyAccessibilityService : AccessibilityService() {
                     }
                 }
             }
+
             AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
                 val activePkg = getActiveWindowPackageName() ?: getRootActiveWindowPackageName()
                 if (activePkg.isNullOrEmpty()) return
@@ -327,14 +334,20 @@ class MyAccessibilityService : AccessibilityService() {
                     Log.i(TAG, "开始监控应用：$activePkg")
                     handleAppSwitch(activePkg)
                 } else if (activePkg != currentForegroundApp) {
-                    Log.i(TAG, "检测到窗口活跃变化：$currentForegroundApp -> $activePkg，开始确认计时")
+                    Log.i(
+                        TAG,
+                        "检测到窗口活跃变化：$currentForegroundApp -> $activePkg，开始确认计时"
+                    )
                     pendingSwitchPackageName = activePkg
                     pendingSwitchStart = System.currentTimeMillis()
                     switchConfirmJob?.cancel()
                     switchConfirmJob = serviceScope.launch {
                         delay(SWITCH_CONFIRM_MS)
                         if (lastObservedPackageName == pendingSwitchPackageName) {
-                            Log.i(TAG, "窗口活跃变化确认成立：$currentForegroundApp -> $pendingSwitchPackageName")
+                            Log.i(
+                                TAG,
+                                "窗口活跃变化确认成立：$currentForegroundApp -> $pendingSwitchPackageName"
+                            )
                             handleAppSwitch(pendingSwitchPackageName)
                         }
                     }
@@ -345,7 +358,7 @@ class MyAccessibilityService : AccessibilityService() {
 
     private fun handleAppSwitch(newPackageName: String?) {
         val now = System.currentTimeMillis()
-        
+
         // 记录上一个应用的使用时间
         currentForegroundApp?.let { prevApp ->
             if (monitoredApps.contains(prevApp) && appStartTime > 0) {
@@ -356,19 +369,27 @@ class MyAccessibilityService : AccessibilityService() {
                     }
                     info.totalTimeInForeground += usedTime
 
-                    Log.i(TAG, "应用切换，记录会话：$prevApp，开始=${Date(appStartTime)}，结束=${Date(now)}，时长=${usedTime}秒，准备落库")
-                    
+                    Log.i(
+                        TAG,
+                        "应用切换，记录会话：$prevApp，开始=${Date(appStartTime)}，结束=${Date(now)}，时长=${usedTime}秒，准备落库"
+                    )
+
                     // 保存到SharedPreferences
                     saveAppUsageData()
-                    
+
                     // 保存到数据库
                     saveUsageRecordToDatabase(prevApp, appStartTime, now, usedTime)
                 } else {
-                    Log.i(TAG, "会话过短(<=${MIN_SESSION_SECONDS}s)，忽略落库：$prevApp，开始=${Date(appStartTime)}，结束=${Date(now)}，时长=${usedTime}秒")
+                    Log.i(
+                        TAG,
+                        "会话过短(<=${MIN_SESSION_SECONDS}s)，忽略落库：$prevApp，开始=${
+                            Date(appStartTime)
+                        }，结束=${Date(now)}，时长=${usedTime}秒"
+                    )
                 }
             }
         }
-        
+
         // 更新当前应用
         currentForegroundApp = newPackageName
         appStartTime = now
@@ -376,7 +397,7 @@ class MyAccessibilityService : AccessibilityService() {
         // 更新调试悬浮窗文案并确保显示状态
         updateOverlayText(newPackageName)
         ensureOverlayState()
-        
+
         // 如果是监控的应用，记录打开次数和最后打开时间
         if (newPackageName != null && monitoredApps.contains(newPackageName)) {
             val info = appUsageData.getOrPut(newPackageName) {
@@ -396,7 +417,8 @@ class MyAccessibilityService : AccessibilityService() {
             val channel = NotificationChannel(NOTIFICATION_CHANNEL_ID, name, importance).apply {
                 description = descriptionText
             }
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
     }
@@ -411,7 +433,7 @@ class MyAccessibilityService : AccessibilityService() {
             } catch (e: Exception) {
                 packageName
             }
-            
+
             /*// 根据使用时间和阈值发送不同级别的通知
             when {
                 minutesUsed >= threshold2 -> {

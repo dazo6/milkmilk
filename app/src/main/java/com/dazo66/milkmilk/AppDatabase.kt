@@ -6,10 +6,15 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [AppUsageRecord::class, AggregatedBehavior::class, AggregatedBehaviorSource::class], version = 2, exportSchema = false)
+@Database(
+    entities = [AppUsageRecord::class, AggregatedBehavior::class, AggregatedBehaviorSource::class],
+    version = 2,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun appUsageDao(): AppUsageDao
+
     // 新增：聚合行为 DAO
     abstract fun aggregatedBehaviorDao(): AggregatedBehaviorDao
 
@@ -24,8 +29,8 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "app_usage_database"
                 )
-                .fallbackToDestructiveMigration()
-                .build()
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

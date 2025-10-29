@@ -2,26 +2,53 @@ package com.dazo66.milkmilk.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dazo66.milkmilk.DailyBehaviorStats
 import com.dazo66.milkmilk.MainViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
+import java.util.Date
+import java.util.GregorianCalendar
+import java.util.Locale
 
 /**
  * 热力图组件，支持 日/周/月/年 四种视图；按年分隔并展示年度总次数。
  */
+// 统一热力图方块尺寸与间距（缩小并保持一致）
+private val HEATMAP_CELL_SIZE = 18.dp
+private val HEATMAP_GAP = 5.dp
+
+// 并排两个矩阵单元之间的间距（行内两个单元的水平间距）
+private val HEATMAP_MATRIX_GAP = 15.dp
+
+// 方块内数字的统一字体大小
+private val HEATMAP_TEXT_SIZE = 12.sp
+
 @Composable
 fun HeatmapView(
     dailyStats: List<DailyBehaviorStats>,
@@ -74,45 +101,53 @@ private fun DayHeatmap(
             YearSeparator(year = year, total = yearTotal)
 
             val months = yearStats.map { getMonth(it.date) }.distinct().sortedDescending()
-            months.forEach { month ->
-                val matrix = buildMonthMatrix(year, month)
-                 Text(
-                     text = SimpleDateFormat("yyyy年MM月", Locale.getDefault()).format(
-                         GregorianCalendar(year, month, 1).time
-                     ),
-                     fontWeight = FontWeight.SemiBold,
-                     fontSize = 14.sp,
-                     modifier = Modifier.padding(vertical = 4.dp)
-                 )
-                 // 在日视图中：进一步增大间距、进一步缩小格子
-                 BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                     val columns = 7
-                     val gap = 8.dp
-                     val rawSize = (maxWidth - gap * (columns - 1)) / columns
-                     val cellSize = rawSize * 0.90f
-                     Column(verticalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.fillMaxWidth()) {
-                         matrix.forEach { row ->
-                             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                                 row.forEach { date ->
-                                     // 过去或今天：显示可点击的方块；未来：占位不绘制
-                                     val isPastOrToday = date != null && !date.after(today)
-                                     if (date != null && isPastOrToday) {
-                                         val normalized = normalizeDay(date)
-                                         val count = statsByDate[normalized]?.behaviorCount ?: 0
-                                        DaySquare(
-                                            date = date,
-                                            count = count,
-                                            onClick = { onDayClick(date, count) },
-                                            sizeDp = cellSize
-                                        )
-                                     } else {
-                                         InvisibleSquare(sizeDp = cellSize)
-                                     }
-                                 }
-                             }
-                         }
-                     }
-                 }
+            val monthPairs = months.chunked(2)
+            monthPairs.forEach { pair ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(HEATMAP_MATRIX_GAP)
+                ) {
+                    pair.forEach { month ->
+                        val matrix = buildMonthMatrix(year, month)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = SimpleDateFormat("yyyy年MM月", Locale.getDefault()).format(
+                                    GregorianCalendar(year, month, 1).time
+                                ),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                                matrix.forEach { row ->
+                                    Row(horizontalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                                        row.forEach { date ->
+                                            val isPastOrToday = date != null && !date.after(today)
+                                            if (date != null && isPastOrToday) {
+                                                val normalized = normalizeDay(date)
+                                                val count =
+                                                    statsByDate[normalized]?.behaviorCount ?: 0
+                                                DaySquare(
+                                                    date = date,
+                                                    count = count,
+                                                    onClick = { onDayClick(date, count) },
+                                                    sizeDp = HEATMAP_CELL_SIZE
+                                                )
+                                            } else {
+                                                InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
     }
@@ -122,45 +157,57 @@ private fun DayHeatmap(
 @Composable
 private fun WeekHeatmap(dailyStats: List<DailyBehaviorStats>, onWeekClick: (Int, Int) -> Unit) {
     val cal = remember { Calendar.getInstance() }
-    val years = remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
+    val years =
+        remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
 
+    val yearPairs = remember(years) { years.chunked(2) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        years.forEach { year ->
-            val yearStats = dailyStats.filter { getYear(it.date) == year }
-            val yearTotal = yearStats.sumOf { it.behaviorCount }
+        yearPairs.forEach { pair ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(HEATMAP_MATRIX_GAP)
+            ) {
+                pair.forEach { year ->
+                    val yearStats = dailyStats.filter { getYear(it.date) == year }
+                    val yearTotal = yearStats.sumOf { it.behaviorCount }
 
-            val weekCounts = IntArray(54) { 0 }.also { arr ->
-                yearStats.forEach { stat ->
-                    cal.time = stat.date
-                    val week = cal.get(Calendar.WEEK_OF_YEAR)
-                    if (week in 1..53) arr[week] += stat.behaviorCount
-                }
-            }
-            val totalWeeks = (53 downTo 1).firstOrNull { weekCounts[it] > 0 } ?: 52
-            val cols = 7
-            val rows = (totalWeeks + cols - 1) / cols
+                    val weekCounts = IntArray(54) { 0 }.also { arr ->
+                        yearStats.forEach { stat ->
+                            cal.time = stat.date
+                            val week = cal.get(Calendar.WEEK_OF_YEAR)
+                            if (week in 1..53) arr[week] += stat.behaviorCount
+                        }
+                    }
+                    val totalWeeks = (53 downTo 1).firstOrNull { weekCounts[it] > 0 } ?: 52
+                    val cols = 7
+                    val rows = (totalWeeks + cols - 1) / cols
 
-            YearSeparator(year = year, total = yearTotal)
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                val cols = 7
-                val gap = 8.dp
-                val rawSize = (maxWidth - gap * (cols - 1)) / cols
-                val cellSize = rawSize * 0.90f
-                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                    for (r in 0 until rows) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            for (c in 0 until cols) {
-                                val index = r * cols + c + 1
-                                if (index in 1..totalWeeks) {
-                                    val count = weekCounts[index]
-                                    AggregatedSquare(count = count, sizeDp = cellSize, onClick = { onWeekClick(year, index) })
-                                } else {
-                                    InvisibleSquare(sizeDp = cellSize)
+                    Column(modifier = Modifier.weight(1f)) {
+                        YearSeparator(year = year, total = yearTotal)
+                        Column(verticalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                            for (r in 0 until rows) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                                    for (c in 0 until cols) {
+                                        val index = r * cols + c + 1
+                                        if (index in 1..totalWeeks) {
+                                            val count = weekCounts[index]
+                                            AggregatedSquare(
+                                                count = count,
+                                                sizeDp = HEATMAP_CELL_SIZE,
+                                                onClick = { onWeekClick(year, index) })
+                                        } else {
+                                            InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                }
+                if (pair.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -170,51 +217,65 @@ private fun WeekHeatmap(dailyStats: List<DailyBehaviorStats>, onWeekClick: (Int,
 // ————————————————— 月视图：每年一个矩阵，按月聚合 —————————————————
 @Composable
 private fun MonthHeatmap(dailyStats: List<DailyBehaviorStats>, onMonthClick: (Int, Int) -> Unit) {
-    val years = remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
+    val years =
+        remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
     // 使用“今天”作为上限：过去月份即使无数据也显示并可点击
     val today = remember { Calendar.getInstance() }
     val currentYear = today.get(Calendar.YEAR)
     val currentMonth = today.get(Calendar.MONTH) // 0-based
 
+    val yearPairs = remember(years) { years.chunked(2) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        years.forEach { year ->
-            val yearStats = dailyStats.filter { getYear(it.date) == year }
-            val yearTotal = yearStats.sumOf { it.behaviorCount }
+        yearPairs.forEach { pair ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(HEATMAP_MATRIX_GAP)
+            ) {
+                pair.forEach { year ->
+                    val yearStats = dailyStats.filter { getYear(it.date) == year }
+                    val yearTotal = yearStats.sumOf { it.behaviorCount }
 
-            val monthCounts = IntArray(12) { 0 }.also { arr ->
-                yearStats.forEach { stat ->
-                    val month = getMonth(stat.date)
-                    arr[month] += stat.behaviorCount
-                }
-            }
+                    val monthCounts = IntArray(12) { 0 }.also { arr ->
+                        yearStats.forEach { stat ->
+                            val month = getMonth(stat.date)
+                            arr[month] += stat.behaviorCount
+                        }
+                    }
 
-            YearSeparator(year = year, total = yearTotal)
-
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-                val cols = 7
-                val rows = 2
-                val gap = 8.dp
-                val rawSize = (maxWidth - gap * (cols - 1)) / cols
-                val cellSize = rawSize * 0.90f
-                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                    for (r in 0 until rows) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                            for (c in 0 until cols) {
-                                val monthIndex = r * cols + c
-                                if (monthIndex < 12) {
-                                    val isPastOrCurrentMonth = (year < currentYear) || (year == currentYear && monthIndex <= currentMonth)
-                                    if (isPastOrCurrentMonth) {
-                                        val count = monthCounts[monthIndex]
-                                        AggregatedSquare(count = count, sizeDp = cellSize, onClick = { onMonthClick(year, monthIndex) })
-                                    } else {
-                                        InvisibleSquare(sizeDp = cellSize)
+                    Column(modifier = Modifier.weight(1f)) {
+                        YearSeparator(year = year, total = yearTotal)
+                        val cols = 7
+                        val rows = 2
+                        Column(verticalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                            for (r in 0 until rows) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(HEATMAP_GAP)) {
+                                    for (c in 0 until cols) {
+                                        val monthIndex = r * cols + c
+                                        if (monthIndex < 12) {
+                                            val isPastOrCurrentMonth =
+                                                (year < currentYear) || (year == currentYear && monthIndex <= currentMonth)
+                                            if (isPastOrCurrentMonth) {
+                                                val count = monthCounts[monthIndex]
+                                                AggregatedSquare(
+                                                    count = count,
+                                                    sizeDp = HEATMAP_CELL_SIZE,
+                                                    onClick = { onMonthClick(year, monthIndex) })
+                                            } else {
+                                                InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                            }
+                                        } else {
+                                            InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                        }
                                     }
-                                } else {
-                                    InvisibleSquare(sizeDp = cellSize)
                                 }
                             }
                         }
                     }
+                }
+                if (pair.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -224,10 +285,12 @@ private fun MonthHeatmap(dailyStats: List<DailyBehaviorStats>, onMonthClick: (In
 // ————————————————— 年视图：仅展示年度总次数（单行） —————————————————
 @Composable
 private fun YearHeatmap(dailyStats: List<DailyBehaviorStats>) {
-    val years = remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
+    val years =
+        remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         years.forEach { year ->
-            val yearTotal = dailyStats.filter { getYear(it.date) == year }.sumOf { it.behaviorCount }
+            val yearTotal =
+                dailyStats.filter { getYear(it.date) == year }.sumOf { it.behaviorCount }
             YearSeparator(year = year, total = yearTotal)
         }
     }
@@ -236,7 +299,7 @@ private fun YearHeatmap(dailyStats: List<DailyBehaviorStats>) {
 @Composable
 private fun YearSeparator(year: Int, total: Int) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Divider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "${year}年 ${total}次",
@@ -277,7 +340,11 @@ private fun AggregatedSquare(count: Int, sizeDp: Dp, onClick: (() -> Unit)? = nu
         if (count > 0) {
             Text(
                 text = count.toString(),
-                fontSize = 13.sp,
+                fontSize = HEATMAP_TEXT_SIZE,
+                modifier = Modifier
+                    .wrapContentSize(Alignment.Center)
+                    .offset(y = (-2).dp),
+                textAlign = TextAlign.Center,
                 color = if (count <= 2) Color.Black else Color.White
             )
         }
@@ -305,7 +372,11 @@ private fun DaySquare(
         if (count > 0) {
             Text(
                 text = count.toString(),
-                fontSize = 13.sp,
+                fontSize = HEATMAP_TEXT_SIZE,
+                modifier = Modifier
+                    .wrapContentSize(Alignment.Center)
+                    .offset(y = (-2).dp),
+                textAlign = TextAlign.Center,
                 color = textColor
             )
         }

@@ -2,8 +2,6 @@ package com.dazo66.milkmilk
 
 import android.content.Context
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import java.util.Date
@@ -133,7 +131,11 @@ class AppUsageRepository(context: Context) {
     }
 
     // 获取分页数据（按时间范围）
-    fun getPagedUsageRecords(startDate: Date, endDate: Date, monitoredPackages: List<String>): PagingSource<Int, AppUsageRecord> {
+    fun getPagedUsageRecords(
+        startDate: Date,
+        endDate: Date,
+        monitoredPackages: List<String>
+    ): PagingSource<Int, AppUsageRecord> {
         return if (monitoredPackages.isEmpty()) {
             appUsageDao.pagingByDateRange(startDate, endDate)
         } else {
@@ -166,18 +168,34 @@ class AppUsageRepository(context: Context) {
     private val behaviorAggregationService = BehaviorAggregationService(context)
 
     // 获取每日行为统计（旧：直接计算）
-    suspend fun getDailyBehaviorStats(startDate: Date, endDate: Date, monitoredPackages: List<String>): List<DailyBehaviorStats> {
-        return behaviorAggregationService.calculateDailyBehaviorStats(startDate, endDate, monitoredPackages)
+    suspend fun getDailyBehaviorStats(
+        startDate: Date,
+        endDate: Date,
+        monitoredPackages: List<String>
+    ): List<DailyBehaviorStats> {
+        return behaviorAggregationService.calculateDailyBehaviorStats(
+            startDate,
+            endDate,
+            monitoredPackages
+        )
     }
 
     // 新增：从聚合表读取每日行为统计（首页切换目标）
-    suspend fun getDailyBehaviorStatsFromAggregated(startDate: Date, endDate: Date, minSeconds: Long): List<DailyBehaviorStats> {
+    suspend fun getDailyBehaviorStatsFromAggregated(
+        startDate: Date,
+        endDate: Date,
+        minSeconds: Long
+    ): List<DailyBehaviorStats> {
         return aggregatedBehaviorDao.getDailyStats(startDate, endDate, minSeconds)
     }
 
 
     // 新增：从聚合表读取区间的行为详情（映射为 ContinuousBehavior）
-    suspend fun getAggregatedBehaviorsByRange(startDate: Date, endDate: Date, minSeconds: Long): List<ContinuousBehavior> {
+    suspend fun getAggregatedBehaviorsByRange(
+        startDate: Date,
+        endDate: Date,
+        minSeconds: Long
+    ): List<ContinuousBehavior> {
         val rows = aggregatedBehaviorDao.getBehaviorsByDateRange(startDate, endDate, minSeconds)
         return rows.map {
             ContinuousBehavior(
@@ -192,7 +210,10 @@ class AppUsageRepository(context: Context) {
     }
 
     // 新增：从聚合表读取指定日期的行为详情（映射为 ContinuousBehavior）
-    suspend fun getAggregatedBehaviorsForDate(date: Date, minSeconds: Long): List<ContinuousBehavior> {
+    suspend fun getAggregatedBehaviorsForDate(
+        date: Date,
+        minSeconds: Long
+    ): List<ContinuousBehavior> {
         val rows = aggregatedBehaviorDao.getBehaviorsForDate(date, minSeconds)
         return rows.map {
             ContinuousBehavior(
@@ -218,7 +239,11 @@ class AppUsageRepository(context: Context) {
         val startDate = all.first().startTime
         val endDate = all.last().endTime
         // 3) 聚合（携带源ID）
-        val aggregated = behaviorAggregationService.aggregateContinuousBehaviorsWithSources(startDate, endDate, monitoredPackages)
+        val aggregated = behaviorAggregationService.aggregateContinuousBehaviorsWithSources(
+            startDate,
+            endDate,
+            monitoredPackages
+        )
         if (aggregated.isEmpty()) return
         // 4) 批量插入行为
         val behaviorRows = aggregated.map {
@@ -271,7 +296,11 @@ class AppUsageRepository(context: Context) {
         }.time
 
         // 聚合（含源ID）
-        val aggregated = behaviorAggregationService.aggregateContinuousBehaviorsWithSources(windowStart, windowEnd, monitoredPackages)
+        val aggregated = behaviorAggregationService.aggregateContinuousBehaviorsWithSources(
+            windowStart,
+            windowEnd,
+            monitoredPackages
+        )
         if (aggregated.isEmpty()) return
 
         // 过滤：只更新开始时间位于 startIndexTime .. startIndexTime+3d 的行为
@@ -284,7 +313,8 @@ class AppUsageRepository(context: Context) {
             set(java.util.Calendar.MILLISECOND, 0)
         }.time
         var updateEnd = windowEnd
-        val toUpdate = aggregated.filter { it.behavior.startTime.time in updateStart.time..updateEnd.time }
+        val toUpdate =
+            aggregated.filter { it.behavior.startTime.time in updateStart.time..updateEnd.time }
         if (toUpdate.isEmpty()) return
 
 
@@ -307,13 +337,23 @@ class AppUsageRepository(context: Context) {
         for (i in ids.indices) {
             val aggId = ids[i]
             val srcIds = toUpdate[i].sourceRecordIds
-            srcIds.forEach { rid -> sources.add(AggregatedBehaviorSource(aggregatedBehaviorId = aggId, recordId = rid)) }
+            srcIds.forEach { rid ->
+                sources.add(
+                    AggregatedBehaviorSource(
+                        aggregatedBehaviorId = aggId,
+                        recordId = rid
+                    )
+                )
+            }
         }
         if (sources.isNotEmpty()) {
             aggregatedBehaviorDao.insertSources(sources)
         }
         // 日志与通知：增量更新完成
-        Log.i("AppUsageRepository", "增量更新写入聚合行为 ${ids.size} 条；窗口 ${updateStart} .. ${updateEnd}")
+        Log.i(
+            "AppUsageRepository",
+            "增量更新写入聚合行为 ${ids.size} 条；窗口 ${updateStart} .. ${updateEnd}"
+        )
         AggregationEvents.notifyUpdated()
     }
 }

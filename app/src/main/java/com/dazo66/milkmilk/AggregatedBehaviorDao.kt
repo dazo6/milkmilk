@@ -31,10 +31,18 @@ interface AggregatedBehaviorDao {
     suspend fun deleteSourcesByStartTimeRange(startDate: Date, endDate: Date)
 
     @Query("SELECT * FROM aggregated_behaviors WHERE date BETWEEN :startDate AND :endDate AND totalDurationSeconds >= :minSeconds ORDER BY date ASC, startTime ASC")
-    suspend fun getBehaviorsByDateRange(startDate: Date, endDate: Date, minSeconds: Long): List<AggregatedBehavior>
+    suspend fun getBehaviorsByDateRange(
+        startDate: Date,
+        endDate: Date,
+        minSeconds: Long
+    ): List<AggregatedBehavior>
 
     @Query("SELECT date as date, COUNT(*) as behaviorCount, SUM(totalDurationSeconds) as totalDurationSeconds FROM aggregated_behaviors WHERE date BETWEEN :startDate AND :endDate AND totalDurationSeconds >= :minSeconds GROUP BY date ORDER BY date ASC")
-    suspend fun getDailyStats(startDate: Date, endDate: Date, minSeconds: Long): List<DailyBehaviorStats>
+    suspend fun getDailyStats(
+        startDate: Date,
+        endDate: Date,
+        minSeconds: Long
+    ): List<DailyBehaviorStats>
 
     @Query("SELECT * FROM aggregated_behaviors WHERE date = :date AND totalDurationSeconds >= :minSeconds ORDER BY startTime ASC")
     suspend fun getBehaviorsForDate(date: Date, minSeconds: Long): List<AggregatedBehavior>

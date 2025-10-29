@@ -17,10 +17,10 @@ object NotificationHelper {
     private const val CHANNEL_ID = "app_usage_channel"
     private const val CHANNEL_NAME = "应用使用时间"
     private const val CHANNEL_DESCRIPTION = "应用使用时间监控通知"
-    
+
     private const val NOTIFICATION_ID_THRESHOLD_1 = 1001
     private const val NOTIFICATION_ID_THRESHOLD_2 = 1002
-    
+
     /**
      * 创建通知渠道
      */
@@ -33,12 +33,12 @@ object NotificationHelper {
             ).apply {
                 description = CHANNEL_DESCRIPTION
             }
-            
+
             val notificationManager = context.getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
     }
-    
+
     /**
      * 发送应用使用时间阈值通知
      * @param context 上下文
@@ -52,18 +52,19 @@ object NotificationHelper {
         usageTime: Int,
         isThreshold1: Boolean
     ) {
-        val notificationId = if (isThreshold1) NOTIFICATION_ID_THRESHOLD_1 else NOTIFICATION_ID_THRESHOLD_2
+        val notificationId =
+            if (isThreshold1) NOTIFICATION_ID_THRESHOLD_1 else NOTIFICATION_ID_THRESHOLD_2
         val thresholdText = if (isThreshold1) "第一阈值" else "第二阈值"
-        
+
         // 创建打开应用的Intent
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, 
+            context, 0, intent,
             PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         // 构建通知
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification) // 确保在drawable中有此图标
@@ -73,12 +74,13 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-        
+
         // 发送通知
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(notificationId, notification)
     }
-    
+
     /**
      * 发送每日使用统计通知
      * @param context 上下文
@@ -99,25 +101,30 @@ object NotificationHelper {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, 
+            context, 0, intent,
             PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         // 构建通知
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("每日应用使用统计")
             .setContentText("今日共监控 $totalApps 个应用，总使用时间 $totalUsageTime 分钟")
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("今日共监控 $totalApps 个应用，总使用时间 $totalUsageTime 分钟\n" +
-                        "使用最多的应用: $mostUsedApp ($mostUsedTime 分钟)"))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(
+                        "今日共监控 $totalApps 个应用，总使用时间 $totalUsageTime 分钟\n" +
+                                "使用最多的应用: $mostUsedApp ($mostUsedTime 分钟)"
+                    )
+            )
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-        
+
         // 发送通知
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(1003, notification)
     }
 }

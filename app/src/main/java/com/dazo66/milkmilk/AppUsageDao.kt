@@ -1,12 +1,12 @@
 package com.dazo66.milkmilk
 
 import androidx.lifecycle.LiveData
+import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import java.util.Date
-import androidx.paging.PagingSource
 
 @Dao
 interface AppUsageDao {
@@ -21,7 +21,7 @@ interface AppUsageDao {
 
     @Query("SELECT packageName, SUM(durationSeconds) as totalDuration FROM app_usage_records WHERE startTime BETWEEN :startDate AND :endDate GROUP BY packageName ORDER BY totalDuration DESC")
     fun getAppUsageSummary(startDate: Date, endDate: Date): LiveData<List<AppUsageSummary>>
-    
+
     @Query("SELECT packageName, SUM(durationSeconds) as totalDuration FROM app_usage_records WHERE startTime BETWEEN :startDate AND :endDate GROUP BY packageName ORDER BY totalDuration DESC")
     suspend fun getAppUsageSummaryDirect(startDate: Date, endDate: Date): List<AppUsageSummary>
 
@@ -40,7 +40,11 @@ interface AppUsageDao {
 
     // 获取监控应用在指定日期范围内的使用记录
     @Query("SELECT * FROM app_usage_records WHERE packageName IN (:monitoredPackages) AND startTime BETWEEN :startDate AND :endDate ORDER BY startTime ASC")
-    suspend fun getMonitoredUsageRecordsForAggregation(monitoredPackages: List<String>, startDate: Date, endDate: Date): List<AppUsageRecord>
+    suspend fun getMonitoredUsageRecordsForAggregation(
+        monitoredPackages: List<String>,
+        startDate: Date,
+        endDate: Date
+    ): List<AppUsageRecord>
 
     // 新增：获取全部会话记录（用于导出）
     @Query("SELECT * FROM app_usage_records ORDER BY startTime ASC")
@@ -64,5 +68,9 @@ interface AppUsageDao {
 
     // PagingSource：按时间范围+包名列表分页
     @Query("SELECT * FROM app_usage_records WHERE packageName IN (:packages) AND startTime BETWEEN :startDate AND :endDate ORDER BY startTime DESC")
-    fun pagingByDateRangeAndPackages(packages: List<String>, startDate: Date, endDate: Date): PagingSource<Int, AppUsageRecord>
+    fun pagingByDateRangeAndPackages(
+        packages: List<String>,
+        startDate: Date,
+        endDate: Date
+    ): PagingSource<Int, AppUsageRecord>
 }

@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,29 +50,14 @@ import java.util.Locale
 fun StatisticsTab(viewModel: MainViewModel) {
     val dailyStats = viewModel.dailyBehaviorStats
     var selectedView by remember { mutableStateOf(viewModel.statisticsViewType) }
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
     val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
-    // 首次进入统计页时触发数据加载
-    LaunchedEffect(Unit) {
-        viewModel.loadBehaviorStats()
-    }
     // 只在监控应用列表变化时加载统计，避免重复初始加载
     LaunchedEffect(viewModel.monitoredApps.size) {
         viewModel.loadBehaviorStats()
-    }
-
-    // 页面可见时尝试增量刷新（保持最新）
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.maybeIncrementalRefreshOnAppOpen()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // 刷新状态（仅用于点击刷新按钮）
@@ -151,13 +135,13 @@ fun StatisticsTab(viewModel: MainViewModel) {
             behaviors = viewModel.selectedDayBehaviors,
             onDismiss = { viewModel.showDayDetailDialog = false },
             timeFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "HH:mm:ss",
                     Locale.getDefault()
                 )
             },
             dateFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "yyyy-MM-dd",
                     Locale.getDefault()
                 )
@@ -172,13 +156,13 @@ fun StatisticsTab(viewModel: MainViewModel) {
             behaviors = viewModel.selectedRangeBehaviors,
             onDismiss = { viewModel.showWeekDetailDialog = false },
             timeFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "HH:mm:ss",
                     Locale.getDefault()
                 )
             },
             dateFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "yyyy-MM-dd",
                     Locale.getDefault()
                 )
@@ -193,13 +177,13 @@ fun StatisticsTab(viewModel: MainViewModel) {
             behaviors = viewModel.selectedRangeBehaviors,
             onDismiss = { viewModel.showMonthDetailDialog = false },
             timeFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "HH:mm:ss",
                     Locale.getDefault()
                 )
             },
             dateFormatter = remember {
-                java.text.SimpleDateFormat(
+                SimpleDateFormat(
                     "yyyy-MM-dd",
                     Locale.getDefault()
                 )
