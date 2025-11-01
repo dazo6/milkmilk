@@ -21,34 +21,20 @@
 - 可自定义配置记录阈值：应用切换阈值、有效行为时长阈值。
 - 所有数据本地存储，支持导出和导入。
 
-## 运行逻辑图 🧠
-```mermaid
-flowchart LR
-    A[聚合结果：ContinuousBehavior 列表<br/>每条含 start,end,totalDuration,sessionCount] --> B{筛选有效行为}
-    B -->|totalDurationSeconds >= 有效行为时长阈值| C[有效行为]
-    B -->|否则| D[丢弃（统计不计入）]
-
-    subgraph 日统计计算
-    C --> E[按日期分组<br/>计算 DailyBehaviorStats]
-    E --> F[behaviorCount = 有效行为数量]
-    E --> G[totalDurationSeconds = 有效行为时长之和]
-    end
-```
 
 ## 主要模块 🧩
 - `app/src/main/java/com/dazo66/milkmilk/MainActivity.kt`：入口 Activity 与页面容器。
 - `app/src/main/java/com/dazo66/milkmilk/MainViewModel.kt`：业务状态与统计数据管理。
 - `app/src/main/java/com/dazo66/milkmilk/ui/StatisticsTab.kt`：统计页 UI 与交互逻辑。
 - `app/src/main/java/com/dazo66/milkmilk/ui/HeatmapView.kt`：热力图组件（日/周/月/年视图）。
-- `app/src/main/java/com/dazo66/milkmilk/service/AppMonitorService.kt`：使用行为采集服务（可访问性）。
 
 ## 权限与配置 🔧
-- 由于采用可访问性服务进行行为采集，首次运行需要在系统设置中启用本应用的“辅助功能”权限。
+- 基于UsageStatsManager进行采集事件，本应用会在后台进行应用使用记录查询。
 - 你可以在应用内选择需要监控的应用列表，统计页会围绕该列表生成热力图与详情。
 
 ## 关于本项目 🎯
 - 本人本职工作是一位后端开发，没有多少审美，如果有人愿意优化UI非常欢迎发起pr。
-- 由于之前没做过安卓开发，这个项目的性能优化应该还有很大的空间，但是我不知道如何去优化了，也欢迎给我提pr。
+- 由于之前没做过安卓开发，没写过kt代码，这个项目的性能优化应该还有很大的空间，但是我不知道如何去优化了，也欢迎给我提pr。
 - 如果对你有帮助欢迎给我点个star。
 
 ## 许可证 📜
