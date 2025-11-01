@@ -50,10 +50,6 @@ import java.util.Locale
 fun StatisticsTab(viewModel: MainViewModel) {
     val dailyStats = viewModel.dailyBehaviorStats
     var selectedView by remember { mutableStateOf(viewModel.statisticsViewType) }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-
-    val timeFormatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
-    val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
     // 只在监控应用列表变化时加载统计，避免重复初始加载
     LaunchedEffect(viewModel.monitoredApps.size) {
