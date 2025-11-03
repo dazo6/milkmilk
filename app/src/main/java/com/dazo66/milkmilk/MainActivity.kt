@@ -354,8 +354,10 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     private val timeRangeFlow = MutableStateFlow(getTodayRange())
     private val monitoredPackagesFlow = MutableStateFlow<List<String>>(emptyList())
+    // 新增：事件页刷新版本号（每次递增触发重新加载分页数据）
+    private val refreshVersionFlow = MutableStateFlow(0)
     val pagedRecords: Flow<PagingData<AppUsageRecord>> =
-        combine(timeRangeFlow, monitoredPackagesFlow) { range, packages ->
+        combine(timeRangeFlow, monitoredPackagesFlow, refreshVersionFlow) { range, packages, _ ->
             Triple(range.first, range.second, packages)
         }.flatMapLatest { (start, end, packages) ->
             Pager(
@@ -482,10 +484,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
         MyAccessibilityService.monitoredApps.addAll(savedApps)
 
 
-        // 监听聚合更新事件：收到后刷新首页统计
+        // 监听聚合更新事件：收到后刷新首页统计与事件分页
         viewModelScope.launch {
             AggregationEvents.updates.collect {
                 loadBehaviorStats()
+                // 触发事件页刷新
+                refreshVersionFlow.value = refreshVersionFlow.value + 1
             }
         }
     }

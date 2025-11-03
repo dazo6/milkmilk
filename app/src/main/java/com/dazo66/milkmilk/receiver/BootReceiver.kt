@@ -18,8 +18,11 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Log.d(TAG, "设备启动完成，准备启动应用监控服务")
 
-            // 启动应用监控服务
-            AppMonitorService.startService(context)
+            // 以普通后台服务方式启动，避免在 BOOT_COMPLETED 触发前台服务限制
+            val serviceIntent = Intent(context, AppMonitorService::class.java).apply {
+                putExtra("start_mode", "boot")
+            }
+            context.startService(serviceIntent)
         }
     }
 }

@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
@@ -63,6 +65,9 @@ class AppMonitorService : Service() {
     private var currentForegroundPkg: String? = null
     private var sessionStartTime: Long = 0L
     private val MIN_SESSION_SECONDS = 3L
+    private var screenReceiver: BroadcastReceiver? = null
+    private var isForegroundStarted: Boolean = false
+    private var startedFromBoot: Boolean = false
 
     override fun onCreate() {
         super.onCreate()
@@ -73,26 +78,22 @@ class AppMonitorService : Service() {
         // 创建通知渠道
         createNotificationChannel()
 
-        // 启动前台服务（指定类型）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                createNotification(),
-                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, createNotification())
-        }
+        // 前台启动移动到 onStartCommand，根据启动来源（如 BOOT_COMPLETED）再决定是否提升为前台
 
-        // 启动每日统计任务
+        // 启动每日统计任务（监控逻辑挪到 onStartCommand，以便获知启动来源）
         scheduleDailySummary()
-
-        // 启动基于 UsageStats 的回退监控（当无障碍不可用时生效）
-        startUsageFallbackMonitoring()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "服务启动")
+        val fromBoot = intent?.getStringExtra("start_mode") == "boot"
+        startedFromBoot = fromBoot
+        // 非开机场景（例如应用启动或用户交互触发），立即提升为前台以保证存活
+        if (!fromBoot) {
+            ensureForeground()
+        }
+        // 在获知启动来源后启动监控逻辑，避免在 BOOT 阶段误提升前台
+        startUsageFallbackMonitoring()
         return START_STICKY
     }
 
@@ -106,6 +107,14 @@ class AppMonitorService : Service() {
         isServiceRunning = false
         dailySummaryJob?.cancel()
         usageMonitorJob?.cancel()
+        // 注销屏幕广播接收器
+        screenReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (_: Exception) {
+            }
+        }
+        screenReceiver = null
     }
 
     /**
@@ -131,6 +140,41 @@ class AppMonitorService : Service() {
      */
     private fun startUsageFallbackMonitoring() {
         usageMonitorJob?.cancel()
+
+        // 注册屏幕事件广播，用于将锁屏视为一次应用切换边界
+        if (screenReceiver == null) {
+            screenReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    when (intent.action) {
+                        Intent.ACTION_SCREEN_OFF -> {
+                            // 屏幕关闭（通常伴随锁屏）：结束当前会话并作为切换边界
+                            Log.i(TAG, "屏幕关闭，作为应用切换边界处理")
+                            handleAppSwitch(null)
+                        }
+                        Intent.ACTION_USER_PRESENT -> {
+                            // 解锁完成：无需强制切换，下一次前台包变化时会重新开始会话
+                            // 同时在用户解锁后将服务提升为前台，符合平台限制
+                            startedFromBoot = false
+                            ensureForeground()
+                        }
+                        Intent.ACTION_SCREEN_ON -> {
+                            // 点亮屏幕：无需处理
+                        }
+                    }
+                }
+            }
+            try {
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                }
+                registerReceiver(screenReceiver, filter)
+            } catch (e: Exception) {
+                Log.e(TAG, "注册屏幕广播接收器失败", e)
+            }
+        }
+
         usageMonitorJob = serviceScope.launch {
             while (isActive) {
                 try {
@@ -148,6 +192,10 @@ class AppMonitorService : Service() {
                         }
                         currentForegroundPkg = null
                         sessionStartTime = 0L
+                        // 无障碍可用通常意味着用户交互场景，确保已经是前台服务
+                        if (!startedFromBoot) {
+                            ensureForeground()
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "UsageStats 回退监控失败", e)
@@ -302,6 +350,27 @@ class AppMonitorService : Service() {
             .setContentIntent(pendingIntent)
             .addAction(0, "无障碍设置", accessibilityPendingIntent)
             .build()
+    }
+
+    /**
+     * 确保服务以前台运行，避免重复调用
+     */
+    private fun ensureForeground() {
+        if (isForegroundStarted) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    createNotification(),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
+            isForegroundStarted = true
+        } catch (e: Exception) {
+            Log.e(TAG, "提升为前台服务失败", e)
+        }
     }
 
     /**
