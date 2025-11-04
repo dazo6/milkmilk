@@ -5,9 +5,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.os.Build
 import android.os.IBinder
@@ -81,7 +81,7 @@ class AppMonitorService : Service() {
         // 前台启动移动到 onStartCommand，根据启动来源（如 BOOT_COMPLETED）再决定是否提升为前台
 
         // 启动每日统计任务（监控逻辑挪到 onStartCommand，以便获知启动来源）
-        scheduleDailySummary()
+        // scheduleDailySummary()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -151,12 +151,14 @@ class AppMonitorService : Service() {
                             Log.i(TAG, "屏幕关闭，作为应用切换边界处理")
                             handleAppSwitch(null)
                         }
+
                         Intent.ACTION_USER_PRESENT -> {
                             // 解锁完成：无需强制切换，下一次前台包变化时会重新开始会话
                             // 同时在用户解锁后将服务提升为前台，符合平台限制
                             startedFromBoot = false
                             ensureForeground()
                         }
+
                         Intent.ACTION_SCREEN_ON -> {
                             // 点亮屏幕：无需处理
                         }
@@ -179,24 +181,13 @@ class AppMonitorService : Service() {
             while (isActive) {
                 try {
                     // 当无障碍不可用时，使用 UsageStats 获取前台应用
-                    if (!isAccessibilityEnabled()) {
-                        val pkg = getForegroundAppByUsageEvents()
-                        if (pkg != null && pkg != currentForegroundPkg) {
-                            Log.i(TAG, "监听到应用变化$currentForegroundPkg -> $pkg")
-                            handleAppSwitch(pkg)
-                        }
-                    } else {
-                        // 无障碍可用时，避免重复记录，清空会话状态
-                        if (currentForegroundPkg != null) {
-                            handleAppSwitch(null)
-                        }
-                        currentForegroundPkg = null
-                        sessionStartTime = 0L
-                        // 无障碍可用通常意味着用户交互场景，确保已经是前台服务
-                        if (!startedFromBoot) {
-                            ensureForeground()
-                        }
+
+                    val pkg = getForegroundAppByUsageEvents()
+                    if (pkg != null && pkg != currentForegroundPkg) {
+                        Log.i(TAG, "监听到应用变化$currentForegroundPkg -> $pkg")
+                        handleAppSwitch(pkg)
                     }
+
                 } catch (e: Exception) {
                     Log.e(TAG, "UsageStats 回退监控失败", e)
                 } finally {

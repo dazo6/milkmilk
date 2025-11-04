@@ -34,6 +34,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -119,24 +121,6 @@ class MainActivity : ComponentActivity() {
 }
 
 
-private fun isAccessibilityEnabled(activity: ComponentActivity): Boolean {
-    val serviceName: String = activity.packageName + ".MyAccessibilityService"
-    val enabled: Int = Settings.Secure.getInt(
-        activity.contentResolver,
-        Settings.Secure.ACCESSIBILITY_ENABLED,
-        0
-    )
-    Log.i("isAccessibilityEnabled", enabled.toString())
-    if (enabled == 1) {
-        val enabledServices: String = Settings.Secure.getString(
-            activity.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        )
-        return enabledServices.contains(serviceName)
-    }
-    return false
-}
-
 private fun isUsageAccessGranted(context: Context): Boolean {
     val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
     val mode = appOpsManager.checkOpNoThrow(
@@ -147,18 +131,6 @@ private fun isUsageAccessGranted(context: Context): Boolean {
     return mode == AppOpsManager.MODE_ALLOWED
 }
 
-private fun checkAccessibilityEnabled(activity: ComponentActivity) {
-    if (!isAccessibilityEnabled(activity)) {
-        android.app.AlertDialog.Builder(activity)
-            .setTitle("需要无障碍权限")
-            .setMessage("该功能需要开启无障碍服务支持")
-            .setPositiveButton("立即开启") { d: DialogInterface?, w: Int ->
-                startActivity(activity, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), null)
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-}
 
 private fun checkUsageAccessPermission(activity: ComponentActivity) {
     if (!isUsageAccessGranted(activity)) {
@@ -1064,13 +1036,12 @@ fun NumberInput(label: String, value: Int, onValueChange: (Int) -> Unit) {
 @Composable
 fun SettingsTab(viewModel: MainViewModel) {
     val context = LocalContext.current
-    val activity = context as ComponentActivity
     // 获取当前 Activity 的生命周期
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    // 用于更新按钮
-    var isForeground by remember { mutableStateOf(false) }
     // 导出/导入所需协程与消息
     val scope = rememberCoroutineScope()
+    // 应用选择对话框搜索关键字
+    var appSearchQuery by remember { mutableStateOf("") }
 
     val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
@@ -1093,7 +1064,6 @@ fun SettingsTab(viewModel: MainViewModel) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
-                    isForeground = !isAccessibilityEnabled(activity)
                     // 记录应用当前处于前台
                     val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
                     prefs.edit().putBoolean("app_foreground", true).apply()
@@ -1102,7 +1072,6 @@ fun SettingsTab(viewModel: MainViewModel) {
                 }
 
                 Lifecycle.Event.ON_STOP -> {
-                    isForeground = !isAccessibilityEnabled(activity)
                     // 记录应用当前退到后台
                     val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
                     prefs.edit().putBoolean("app_foreground", false).apply()
@@ -1124,38 +1093,6 @@ fun SettingsTab(viewModel: MainViewModel) {
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // 无障碍服务设置
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("基本设置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("开启无障碍权限:", modifier = Modifier.weight(1f))
-                    Button(
-                        onClick = { checkAccessibilityEnabled(activity) },
-                        enabled = isForeground
-                    ) {
-                        Text("点击开启")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "无障碍服务用于监控应用使用情况，必须开启才能正常工作",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
 
         // 阈值设置
         Card(
@@ -1339,41 +1276,6 @@ fun SettingsTab(viewModel: MainViewModel) {
         }
 
 
-        // 调试功能（仅 Debug 构建显示）
-        if (BuildConfig.DEBUG) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("调试功能", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("开启调试悬浮窗:", modifier = Modifier.weight(1f))
-                        androidx.compose.material3.Switch(
-                            checked = viewModel.debugOverlayEnabled,
-                            onCheckedChange = {
-                                viewModel.debugOverlayEnabled = it
-                                viewModel.saveDebugOverlayEnabled(context)
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "需要无障碍权限，开启后，当本应用退到后台时，会在屏幕角落显示一个小窗，显示当前前台应用包名。",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-
         // 更新提示对话框
         if (viewModel.showUpdateDialog && viewModel.latestVersionName != null) {
             AlertDialog(
@@ -1395,33 +1297,78 @@ fun SettingsTab(viewModel: MainViewModel) {
             )
         }
 
-        // 应用选择对话框
+        // 应用选择对话框（支持简单搜索）
         if (viewModel.showAppDialog) {
             AlertDialog(
-                onDismissRequest = { viewModel.showAppDialog = false },
+                onDismissRequest = {
+                    viewModel.showAppDialog = false
+                    appSearchQuery = ""
+                },
                 title = { Text("选择应用") },
                 text = {
-                    LazyColumn {
-                        items(viewModel.installedApps.size) { index ->
-                            val app = viewModel.installedApps[index]
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.addMonitoredApp(app)
-                                        viewModel.showAppDialog = false
+                    Column {
+                        TextField(
+                            value = appSearchQuery,
+                            onValueChange = { appSearchQuery = it },
+                            singleLine = true,
+                            placeholder = { Text("搜索应用名或包名") },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (appSearchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { appSearchQuery = "" }) {
+                                        Icon(imageVector = Icons.Filled.Close, contentDescription = "清空")
                                     }
-                                    .padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(app.name)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val filteredApps = if (appSearchQuery.isBlank()) {
+                            viewModel.installedApps
+                        } else {
+                            viewModel.installedApps.filter {
+                                it.name.contains(appSearchQuery, ignoreCase = true) ||
+                                        it.packageName.contains(appSearchQuery, ignoreCase = true)
+                            }
+                        }
+
+                        if (filteredApps.isEmpty()) {
+                            Text(
+                                "无匹配结果",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            LazyColumn {
+                                items(filteredApps.size) { index ->
+                                    val app = filteredApps[index]
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.addMonitoredApp(app)
+                                                viewModel.showAppDialog = false
+                                                appSearchQuery = ""
+                                            }
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(app.name, modifier = Modifier.weight(1f))
+                                    }
+                                }
                             }
                         }
                     }
                 },
                 confirmButton = { },
                 dismissButton = {
-                    TextButton(onClick = { viewModel.showAppDialog = false }) {
+                    TextButton(onClick = {
+                        viewModel.showAppDialog = false
+                        appSearchQuery = ""
+                    }) {
                         Text("取消")
                     }
                 }
