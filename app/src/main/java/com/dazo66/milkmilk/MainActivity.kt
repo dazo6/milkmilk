@@ -569,6 +569,12 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
+    // 无条件刷新事件页展示层（不依赖聚合通知）
+    fun forceEventListRefresh() {
+        refreshVersionFlow.value = refreshVersionFlow.value + 1
+        loadBehaviorStats()
+    }
+
     fun onDayClick(date: Date, count: Int) {
         selectedDate = date
         selectedDayCount = count
@@ -856,6 +862,9 @@ fun Greeting(name: String, modifier: Modifier = Modifier, viewModel: MainViewMod
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                // 无条件刷新事件页展示层
+                vm.forceEventListRefresh()
+                // 同时保留原有：按3分钟阈值决定是否增量重算
                 vm.maybeIncrementalRefreshOnAppOpen()
             }
         }
