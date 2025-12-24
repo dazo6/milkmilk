@@ -1172,33 +1172,6 @@ fun SettingsTab(viewModel: MainViewModel) {
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // 悬浮窗设置
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "悬浮窗展示前台应用",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    androidx.compose.material3.Switch(
-                        checked = viewModel.floatingWindowEnabled,
-                        onCheckedChange = { viewModel.saveFloatingWindowEnabled(it) }
-                    )
-                }
-                Text(
-                    "开启后，将在屏幕上方展示当前前台应用的包名（关闭时仅隐藏文字，保持透明占位，用于保活）",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
 
         // 阈值设置
         Card(
@@ -1358,7 +1331,6 @@ fun SettingsTab(viewModel: MainViewModel) {
                 }
             }
         }
-
         // 悬浮窗设置
         Card(
             modifier = Modifier
@@ -1367,18 +1339,23 @@ fun SettingsTab(viewModel: MainViewModel) {
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("悬浮窗设置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Spacer(modifier = Modifier.height(16.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("显示前台应用包名", modifier = Modifier.weight(1f))
+                    Text(
+                        "悬浮窗展示前台应用",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        modifier = Modifier.weight(1f)
+                    )
                     androidx.compose.material3.Switch(
                         checked = viewModel.floatingWindowEnabled,
-                        onCheckedChange = {
-                            viewModel.floatingWindowEnabled = it
-                            viewModel.saveFloatingWindowEnabled(context)
-                        }
+                        onCheckedChange = { viewModel.saveFloatingWindowEnabled(it) }
                     )
                 }
+                Text(
+                    "开启后，将在屏幕上方展示当前前台应用的包名（关闭时仅隐藏文字，保持透明占位，用于保活）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
