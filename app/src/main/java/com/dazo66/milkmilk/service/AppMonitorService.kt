@@ -92,6 +92,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
     private var floatingView: android.view.View? = null
     // Compose 状态
     private var floatingTextState = androidx.compose.runtime.mutableStateOf("Waiting...")
+    private var isFloatingVisible = androidx.compose.runtime.mutableStateOf(true)
     
     // Lifecycle components for ComposeView
     private val lifecycleRegistry by lazy { LifecycleRegistry(this) }
@@ -102,11 +103,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
     private val prefsChangeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
         if (key == "floating_window_enabled") {
             val enabled = prefs.getBoolean(key, false)
-            if (enabled) {
-                updateFloatingWindow(currentForegroundPkg)
-            } else {
-                removeFloatingWindow()
-            }
+            setFloatingWindowVisibility(enabled)
         }
     }
 
@@ -207,7 +204,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
                     gravity = android.view.Gravity.TOP or android.view.Gravity.START
                     x = 0
-                    y = 200
+                    y = if(isFloatingVisible.value) 200 else -100
                 }
                 
                 val composeView = ComposeView(this).apply {
@@ -215,17 +212,19 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     setViewTreeViewModelStoreOwner(this@AppMonitorService)
                     setViewTreeSavedStateRegistryOwner(this@AppMonitorService)
                     setContent {
-                        androidx.compose.material3.MaterialTheme {
-                            androidx.compose.foundation.layout.Box(
-                                modifier = Modifier
-                                    .background(Color(0x99000000))
-                                    .padding(8.dp)
-                            ) {
-                                androidx.compose.material3.Text(
-                                    text = floatingTextState.value,
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
+                        if (isFloatingVisible.value) {
+                            androidx.compose.material3.MaterialTheme {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .background(Color(0x99000000))
+                                        .padding(8.dp)
+                                ) {
+                                    androidx.compose.material3.Text(
+                                        text = floatingTextState.value,
+                                        color = Color.White,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -236,6 +235,44 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
             }
         } catch (e: Exception) {
             Log.e(TAG, "初始化悬浮窗失败", e)
+        }
+    }
+
+    /**
+     * 设置悬浮窗可见性
+     */
+    private fun setFloatingWindowVisibility(visible: Boolean) {
+        isFloatingVisible.value = visible
+        
+        if (visible) {
+            // 如果需要显示但悬浮窗未初始化，则初始化
+            removeFloatingWindow()
+            updateFloatingWindow(currentForegroundPkg)
+            // 更新 LayoutParams 为可交互（虽然目前没有交互逻辑，但保持正常状态）
+            try {
+                val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
+                if (params != null) {
+                    params.flags = params.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                    windowManager?.updateViewLayout(floatingView, params)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "更新悬浮窗可见性失败", e)
+            }
+        } else {
+            // 隐藏时：更新 LayoutParams 为不可触摸，防止透明窗口阻挡操作
+            try {
+                removeFloatingWindow()
+                updateFloatingWindow("");
+                if (floatingView != null) {
+                    val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
+                    if (params != null) {
+                        params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        windowManager?.updateViewLayout(floatingView, params)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "更新悬浮窗隐藏状态失败", e)
+            }
         }
     }
 

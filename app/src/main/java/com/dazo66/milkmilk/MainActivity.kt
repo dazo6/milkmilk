@@ -192,6 +192,21 @@ class MainViewModel(private val context: Context) : ViewModel() {
     var latestVersionName by mutableStateOf<String?>(null)
     var latestReleaseUrl by mutableStateOf<String?>(null)
 
+    // 悬浮窗开关状态
+    var floatingWindowEnabled by mutableStateOf(false)
+
+    init {
+        // 读取悬浮窗设置
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        floatingWindowEnabled = prefs.getBoolean("floating_window_enabled", false)
+    }
+
+    fun saveFloatingWindowEnabled(enabled: Boolean) {
+        floatingWindowEnabled = enabled
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("floating_window_enabled", enabled).apply()
+    }
+
     fun checkForUpdates() {
         updateCheckMessage = "正在检查更新…"
         viewModelScope.launch {
@@ -370,8 +385,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
     var threshold1 by mutableIntStateOf(50)
     var threshold2 by mutableIntStateOf(100)
     var debugOverlayEnabled by mutableStateOf(false)
-    // 悬浮窗开关
-    var floatingWindowEnabled by mutableStateOf(false)
 
     // 监控的应用列表
     val monitoredApps = mutableStateListOf<AppInfo>()
@@ -1159,6 +1172,33 @@ fun SettingsTab(viewModel: MainViewModel) {
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        // 悬浮窗设置
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "悬浮窗展示前台应用",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.floatingWindowEnabled,
+                        onCheckedChange = { viewModel.saveFloatingWindowEnabled(it) }
+                    )
+                }
+                Text(
+                    "开启后，将在屏幕上方展示当前前台应用的包名（关闭时仅隐藏文字，保持透明占位，用于保活）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
 
         // 阈值设置
         Card(
