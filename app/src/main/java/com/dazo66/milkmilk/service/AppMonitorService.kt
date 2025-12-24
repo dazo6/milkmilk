@@ -128,10 +128,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         createNotificationChannel()
         
         // 初始化悬浮窗
-        if (prefs.getBoolean("floating_window_enabled", false)) {
-            initFloatingWindow()
-        }
-
+        setFloatingWindowVisibility(prefs.getBoolean("floating_window_enabled", false))
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         // 前台启动移动到 onStartCommand，根据启动来源（如 BOOT_COMPLETED）再决定是否提升为前台
@@ -184,6 +181,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
      * 初始化悬浮窗
      */
     private fun initFloatingWindow() {
+        Log.d(TAG, "初始化悬浮窗")
         if (!Settings.canDrawOverlays(this)) return
         try {
             if (windowManager == null) {
@@ -204,7 +202,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
                     gravity = android.view.Gravity.TOP or android.view.Gravity.START
                     x = 0
-                    y = if(isFloatingVisible.value) 200 else -100
+                    y = 200
                 }
                 
                 val composeView = ComposeView(this).apply {
