@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
         // 检查并请求必要权限（仅使用情况访问，不在启动时检查无障碍）
         checkUsageAccessPermission(this)
+        checkOverlayPermission(this)
 
         // 启动监控服务
         AppMonitorService.startService(this)
@@ -139,6 +140,27 @@ private fun checkUsageAccessPermission(activity: ComponentActivity) {
             .setMessage("应用需要访问使用情况统计数据来记录应用使用时间")
             .setPositiveButton("立即开启") { d: DialogInterface?, w: Int ->
                 startActivity(activity, Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS), null)
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+}
+
+private fun checkOverlayPermission(context: Context) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
+        android.app.AlertDialog.Builder(context)
+            .setTitle("需要悬浮窗权限")
+            .setMessage("为了展示当前前台应用包名，请授予悬浮窗权限")
+            .setPositiveButton("去授权") { _, _ ->
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:" + context.packageName)
+                    )
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "打开悬浮窗设置失败", e)
+                }
             }
             .setNegativeButton("取消", null)
             .show()
@@ -344,6 +366,8 @@ class MainViewModel(private val context: Context) : ViewModel() {
     var threshold1 by mutableIntStateOf(50)
     var threshold2 by mutableIntStateOf(100)
     var debugOverlayEnabled by mutableStateOf(false)
+    // 悬浮窗开关
+    var floatingWindowEnabled by mutableStateOf(false)
 
     // 监控的应用列表
     val monitoredApps = mutableStateListOf<AppInfo>()
@@ -440,6 +464,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         threshold1 = prefs.getInt("threshold1", threshold1)
         threshold2 = prefs.getInt("threshold2", threshold2)
         debugOverlayEnabled = prefs.getBoolean("debug_overlay_enabled", false)
+        floatingWindowEnabled = prefs.getBoolean("floating_window_enabled", false)
 
         // 加载已保存的监控应用
         savedApps.forEach { packageName ->
@@ -469,6 +494,11 @@ class MainViewModel(private val context: Context) : ViewModel() {
     fun saveDebugOverlayEnabled(context: Context) {
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("debug_overlay_enabled", debugOverlayEnabled).apply()
+    }
+
+    fun saveFloatingWindowEnabled(context: Context) {
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("floating_window_enabled", floatingWindowEnabled).apply()
     }
 
     // 保存阈值设置
@@ -1258,6 +1288,29 @@ fun SettingsTab(viewModel: MainViewModel) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("添加监控应用")
+                }
+            }
+        }
+
+        // 悬浮窗设置
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("悬浮窗设置", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("显示前台应用包名", modifier = Modifier.weight(1f))
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.floatingWindowEnabled,
+                        onCheckedChange = {
+                            viewModel.floatingWindowEnabled = it
+                            viewModel.saveFloatingWindowEnabled(context)
+                        }
+                    )
                 }
             }
         }

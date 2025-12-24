@@ -17,6 +17,23 @@ import androidx.core.app.NotificationCompat
 import com.dazo66.milkmilk.AppUsageRepository
 import com.dazo66.milkmilk.MainActivity
 import com.dazo66.milkmilk.R
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,7 +45,7 @@ import java.util.Calendar
 /**
  * 应用监控前台服务，确保应用在后台稳定运行
  */
-class AppMonitorService : Service() {
+class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx.lifecycle.ViewModelStoreOwner, androidx.savedstate.SavedStateRegistryOwner {
     companion object {
         private const val TAG = "AppMonitorService"
         private const val NOTIFICATION_CHANNEL_ID = "app_monitor_channel"
@@ -69,15 +86,56 @@ class AppMonitorService : Service() {
     private var isForegroundStarted: Boolean = false
     private var startedFromBoot: Boolean = false
 
+    // 悬浮窗相关
+    private var windowManager: android.view.WindowManager? = null
+    private var floatingView: android.view.View? = null
+    // Compose 状态
+    private var floatingTextState = androidx.compose.runtime.mutableStateOf("Waiting...")
+    
+    // Lifecycle components for ComposeView
+    private val lifecycleRegistry by lazy { LifecycleRegistry(this) }
+    private val savedStateRegistryController by lazy { SavedStateRegistryController.create(this) }
+    private val viewModelStoreInternal by lazy { ViewModelStore() }
+    
+    // 配置监听
+    private val prefsChangeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "floating_window_enabled") {
+            val enabled = prefs.getBoolean(key, false)
+            if (enabled) {
+                updateFloatingWindow(currentForegroundPkg)
+            } else {
+                removeFloatingWindow()
+            }
+        }
+    }
+
+    override val lifecycle: Lifecycle get() = lifecycleRegistry
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore get() = viewModelStoreInternal
+
     override fun onCreate() {
         super.onCreate()
+        savedStateRegistryController.performRestore(null)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+        
         Log.d(TAG, "服务创建")
         isServiceRunning = true
         repository = AppUsageRepository(this)
+        
+        // 注册配置监听
+        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.registerOnSharedPreferenceChangeListener(prefsChangeListener)
 
         // 创建通知渠道
         createNotificationChannel()
+        
+        // 初始化悬浮窗
+        if (prefs.getBoolean("floating_window_enabled", false)) {
+            initFloatingWindow()
+        }
 
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
         // 前台启动移动到 onStartCommand，根据启动来源（如 BOOT_COMPLETED）再决定是否提升为前台
 
         // 启动每日统计任务（监控逻辑挪到 onStartCommand，以便获知启动来源）
@@ -103,7 +161,12 @@ class AppMonitorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         Log.d(TAG, "服务销毁")
+        
+        getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+            .unregisterOnSharedPreferenceChangeListener(prefsChangeListener)
+            
         isServiceRunning = false
         dailySummaryJob?.cancel()
         usageMonitorJob?.cancel()
@@ -115,6 +178,87 @@ class AppMonitorService : Service() {
             }
         }
         screenReceiver = null
+        removeFloatingWindow()
+    }
+
+    /**
+     * 初始化悬浮窗
+     */
+    private fun initFloatingWindow() {
+        if (!Settings.canDrawOverlays(this)) return
+        try {
+            if (windowManager == null) {
+                windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            }
+            if (floatingView == null) {
+                val layoutParams = android.view.WindowManager.LayoutParams().apply {
+                    type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        android.view.WindowManager.LayoutParams.TYPE_PHONE
+                    }
+                    format = android.graphics.PixelFormat.TRANSLUCENT
+                    flags = android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                            android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                    width = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+                    height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+                    gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                    x = 0
+                    y = 200
+                }
+                
+                val composeView = ComposeView(this).apply {
+                    setViewTreeLifecycleOwner(this@AppMonitorService)
+                    setViewTreeViewModelStoreOwner(this@AppMonitorService)
+                    setViewTreeSavedStateRegistryOwner(this@AppMonitorService)
+                    setContent {
+                        androidx.compose.material3.MaterialTheme {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .background(Color(0x99000000))
+                                    .padding(8.dp)
+                            ) {
+                                androidx.compose.material3.Text(
+                                    text = floatingTextState.value,
+                                    color = Color.White,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                floatingView = composeView
+                windowManager?.addView(floatingView, layoutParams)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "初始化悬浮窗失败", e)
+        }
+    }
+
+    /**
+     * 更新悬浮窗内容
+     */
+    private fun updateFloatingWindow(text: String?) {
+        floatingTextState.value = text ?: "等待数据..."
+        if (floatingView == null) {
+            initFloatingWindow()
+        }
+    }
+
+    /**
+     * 移除悬浮窗
+     */
+    private fun removeFloatingWindow() {
+        try {
+            if (floatingView != null && windowManager != null) {
+                windowManager?.removeView(floatingView)
+                floatingView = null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "移除悬浮窗失败", e)
+        }
     }
 
     /**
@@ -273,6 +417,12 @@ class AppMonitorService : Service() {
         // 更新当前应用
         currentForegroundPkg = newPackageName
         sessionStartTime = now
+        
+        // 更新悬浮窗
+        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("floating_window_enabled", false)) {
+            updateFloatingWindow(newPackageName)
+        }
     }
 
     /**
