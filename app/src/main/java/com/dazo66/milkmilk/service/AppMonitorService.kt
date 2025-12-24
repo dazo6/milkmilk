@@ -41,6 +41,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.dazo66.milkmilk.utils.LogRecorder
 
 /**
  * 应用监控前台服务，确保应用在后台稳定运行
@@ -144,6 +145,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "服务启动")
+        LogRecorder.record(this, "AppMonitorService 服务启动")
         val fromBoot = intent?.getStringExtra("start_mode") == "boot"
         startedFromBoot = fromBoot
         // 非开机场景（例如应用启动或用户交互触发），立即提升为前台以保证存活
@@ -329,6 +331,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     val pkg = getForegroundAppByUsageEvents()
                     if (pkg != null && pkg != currentForegroundPkg) {
                         Log.i(TAG, "监听到应用变化$currentForegroundPkg -> $pkg")
+                        LogRecorder.record(this@AppMonitorService, "监听到应用变化$currentForegroundPkg -> $pkg")
                         handleAppSwitch(pkg)
                     }
 
@@ -533,9 +536,6 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
 
                 // 等待到明天0点
                 delay(delayMillis)
-
-                // 生成并发送每日统计通知
-                generateDailySummary()
 
                 // 每天执行一次
                 delay(24 * 60 * 60 * 1000)

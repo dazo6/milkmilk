@@ -2,6 +2,10 @@ package com.dazo66.milkmilk
 
 // Removed unused import to fix unresolved reference
 // import com.dazo66.milkmilk.ui.formatDuration
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.DialogInterface
@@ -887,6 +891,29 @@ fun Greeting(name: String, modifier: Modifier = Modifier, viewModel: MainViewMod
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    // 权限请求启动器
+    val requestPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // 可以在这里处理权限请求结果
+    }
+
+    // 检查并请求权限
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // 请求常规权限
+        val permissions = mutableListOf(
+            Manifest.permission.POST_NOTIFICATIONS,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        // 存储权限 (Android 10及以下需要)
+        if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.Q) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        
+        requestPermissionLauncher.launch(permissions.toTypedArray())
+    }
 
     // 应用从后台恢复时：如果距离上次打开超过3分钟，触发增量刷新
     DisposableEffect(lifecycleOwner) {
