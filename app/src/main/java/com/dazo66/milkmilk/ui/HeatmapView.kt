@@ -36,18 +36,17 @@ import java.util.Date
 import java.util.GregorianCalendar
 import java.util.Locale
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.unit.TextUnit
+
 /**
  * 热力图组件，支持 日/周/月/年 四种视图；按年分隔并展示年度总次数。
  */
-// 统一热力图方块尺寸与间距（缩小并保持一致）
-private val HEATMAP_CELL_SIZE = 18.dp
+// 统一热力图方块间距
 private val HEATMAP_GAP = 5.dp
 
 // 并排两个矩阵单元之间的间距（行内两个单元的水平间距）
 private val HEATMAP_MATRIX_GAP = 15.dp
-
-// 方块内数字的统一字体大小
-private val HEATMAP_TEXT_SIZE = 12.sp
 
 @Composable
 fun HeatmapView(
@@ -58,24 +57,30 @@ fun HeatmapView(
     onWeekClick: (Int, Int) -> Unit = { _, _ -> },
     onMonthClick: (Int, Int) -> Unit = { _, _ -> }
 ) {
-    Column(modifier = modifier) {
-        /*Text(
-            text = when (viewType) {
-                MainViewModel.StatisticsViewType.DAY -> "使用行为热力图（日视图）"
-                MainViewModel.StatisticsViewType.WEEK -> "使用行为热力图（周视图）"
-                MainViewModel.StatisticsViewType.MONTH -> "使用行为热力图（月视图）"
-                MainViewModel.StatisticsViewType.YEAR -> "使用行为热力图（年视图）"
-            },
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )*/
+    BoxWithConstraints(modifier = modifier) {
+        // 动态计算单元格大小
+        // 两个矩阵并排：
+        // 宽度 = 2 * (7 * size + 6 * gap) + matrix_gap + 2 * padding_horizontal
+        // maxWidth = 14 * size + 12 * 5.dp + 15.dp + 32.dp
+        // maxWidth = 14 * size + 107.dp
+        // 14 * size = maxWidth - 107.dp
+        
+        val minCellSize = 10.dp
+        val maxCellSize = 24.dp
+        
+        val availableWidth = maxWidth - 32.dp - 15.dp - (12 * 5).dp
+        val calculatedCellSize = (availableWidth / 14)
+        
+        val cellSize = if (calculatedCellSize < minCellSize) minCellSize else if (calculatedCellSize > maxCellSize) maxCellSize else calculatedCellSize
+        val fontSize = (cellSize.value * 0.65).sp
 
-        when (viewType) {
-            MainViewModel.StatisticsViewType.DAY -> DayHeatmap(dailyStats, onDayClick)
-            MainViewModel.StatisticsViewType.WEEK -> WeekHeatmap(dailyStats, onWeekClick)
-            MainViewModel.StatisticsViewType.MONTH -> MonthHeatmap(dailyStats, onMonthClick)
-            MainViewModel.StatisticsViewType.YEAR -> YearHeatmap(dailyStats)
+        Column {
+            when (viewType) {
+                MainViewModel.StatisticsViewType.DAY -> DayHeatmap(dailyStats, onDayClick, cellSize, fontSize)
+                MainViewModel.StatisticsViewType.WEEK -> WeekHeatmap(dailyStats, onWeekClick, cellSize, fontSize)
+                MainViewModel.StatisticsViewType.MONTH -> MonthHeatmap(dailyStats, onMonthClick, cellSize, fontSize)
+                MainViewModel.StatisticsViewType.YEAR -> YearHeatmap(dailyStats)
+            }
         }
     }
 }
@@ -84,7 +89,9 @@ fun HeatmapView(
 @Composable
 private fun DayHeatmap(
     dailyStats: List<DailyBehaviorStats>,
-    onDayClick: (Date, Int) -> Unit
+    onDayClick: (Date, Int) -> Unit,
+    cellSize: Dp,
+    fontSize: TextUnit
 ) {
     val statsByDate = remember(dailyStats) { dailyStats.associateBy { normalizeDay(it.date) } }
     val years = remember(dailyStats) {
@@ -133,10 +140,11 @@ private fun DayHeatmap(
                                                     date = date,
                                                     count = count,
                                                     onClick = { onDayClick(date, count) },
-                                                    sizeDp = HEATMAP_CELL_SIZE
+                                                    sizeDp = cellSize,
+                                                    fontSize = fontSize
                                                 )
                                             } else {
-                                                InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                                InvisibleSquare(sizeDp = cellSize)
                                             }
                                         }
                                     }
@@ -155,7 +163,12 @@ private fun DayHeatmap(
 
 // ————————————————— 周视图：每年一个矩阵，按周聚合 —————————————————
 @Composable
-private fun WeekHeatmap(dailyStats: List<DailyBehaviorStats>, onWeekClick: (Int, Int) -> Unit) {
+private fun WeekHeatmap(
+    dailyStats: List<DailyBehaviorStats>, 
+    onWeekClick: (Int, Int) -> Unit,
+    cellSize: Dp,
+    fontSize: TextUnit
+) {
     val cal = remember { Calendar.getInstance() }
     val years =
         remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
@@ -195,10 +208,11 @@ private fun WeekHeatmap(dailyStats: List<DailyBehaviorStats>, onWeekClick: (Int,
                                             val count = weekCounts[index]
                                             AggregatedSquare(
                                                 count = count,
-                                                sizeDp = HEATMAP_CELL_SIZE,
+                                                sizeDp = cellSize,
+                                                fontSize = fontSize,
                                                 onClick = { onWeekClick(year, index) })
                                         } else {
-                                            InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                            InvisibleSquare(sizeDp = cellSize)
                                         }
                                     }
                                 }
@@ -216,7 +230,12 @@ private fun WeekHeatmap(dailyStats: List<DailyBehaviorStats>, onWeekClick: (Int,
 
 // ————————————————— 月视图：每年一个矩阵，按月聚合 —————————————————
 @Composable
-private fun MonthHeatmap(dailyStats: List<DailyBehaviorStats>, onMonthClick: (Int, Int) -> Unit) {
+private fun MonthHeatmap(
+    dailyStats: List<DailyBehaviorStats>, 
+    onMonthClick: (Int, Int) -> Unit,
+    cellSize: Dp,
+    fontSize: TextUnit
+) {
     val years =
         remember(dailyStats) { dailyStats.map { getYear(it.date) }.distinct().sortedDescending() }
     // 使用“今天”作为上限：过去月份即使无数据也显示并可点击
@@ -260,13 +279,14 @@ private fun MonthHeatmap(dailyStats: List<DailyBehaviorStats>, onMonthClick: (In
                                                 val count = monthCounts[monthIndex]
                                                 AggregatedSquare(
                                                     count = count,
-                                                    sizeDp = HEATMAP_CELL_SIZE,
+                                                    sizeDp = cellSize,
+                                                    fontSize = fontSize,
                                                     onClick = { onMonthClick(year, monthIndex) })
                                             } else {
-                                                InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                                InvisibleSquare(sizeDp = cellSize)
                                             }
                                         } else {
-                                            InvisibleSquare(sizeDp = HEATMAP_CELL_SIZE)
+                                            InvisibleSquare(sizeDp = cellSize)
                                         }
                                     }
                                 }
@@ -327,7 +347,7 @@ private fun InvisibleSquare(sizeDp: Dp) {
 
 // 调整 AggregatedSquare 内文字大小
 @Composable
-private fun AggregatedSquare(count: Int, sizeDp: Dp, onClick: (() -> Unit)? = null) {
+private fun AggregatedSquare(count: Int, sizeDp: Dp, fontSize: TextUnit, onClick: (() -> Unit)? = null) {
     val color = getHeatmapColor(count)
     Box(
         modifier = Modifier
@@ -340,7 +360,7 @@ private fun AggregatedSquare(count: Int, sizeDp: Dp, onClick: (() -> Unit)? = nu
         if (count > 0) {
             Text(
                 text = count.toString(),
-                fontSize = HEATMAP_TEXT_SIZE,
+                fontSize = fontSize,
                 modifier = Modifier
                     .wrapContentSize(Alignment.Center)
                     .offset(y = (-2).dp),
@@ -356,7 +376,8 @@ private fun DaySquare(
     date: Date,
     count: Int,
     onClick: () -> Unit,
-    sizeDp: Dp
+    sizeDp: Dp,
+    fontSize: TextUnit
 ) {
     val color = getHeatmapColor(count)
     val textColor = if (count <= 2) Color.Black else Color.White
@@ -372,7 +393,7 @@ private fun DaySquare(
         if (count > 0) {
             Text(
                 text = count.toString(),
-                fontSize = HEATMAP_TEXT_SIZE,
+                fontSize = fontSize,
                 modifier = Modifier
                     .wrapContentSize(Alignment.Center)
                     .offset(y = (-2).dp),
