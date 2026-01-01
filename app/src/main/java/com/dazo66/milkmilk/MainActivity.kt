@@ -194,17 +194,33 @@ class MainViewModel(private val context: Context) : ViewModel() {
 
     // 悬浮窗开关状态
     var floatingWindowEnabled by mutableStateOf(false)
+    var floatingWindowModeSelectedOnly by mutableStateOf(false)
+    var floatingWindowLocked by mutableStateOf(true)
 
     init {
         // 读取悬浮窗设置
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         floatingWindowEnabled = prefs.getBoolean("floating_window_enabled", false)
+        floatingWindowModeSelectedOnly = prefs.getBoolean("floating_window_mode_selected_only", false)
+        floatingWindowLocked = prefs.getBoolean("floating_window_locked", true)
     }
 
     fun saveFloatingWindowEnabled(enabled: Boolean) {
         floatingWindowEnabled = enabled
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("floating_window_enabled", enabled).apply()
+    }
+    
+    fun saveFloatingWindowModeSelectedOnly(selectedOnly: Boolean) {
+        floatingWindowModeSelectedOnly = selectedOnly
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("floating_window_mode_selected_only", selectedOnly).apply()
+    }
+
+    fun saveFloatingWindowLocked(locked: Boolean) {
+        floatingWindowLocked = locked
+        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("floating_window_locked", locked).apply()
     }
 
     fun checkForUpdates() {
@@ -1353,6 +1369,46 @@ fun SettingsTab(viewModel: MainViewModel) {
                 }
                 Text(
                     "开启后，将在屏幕上方展示当前前台应用的包名（关闭时仅隐藏文字，保持透明占位，用于保活）",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "仅在选定应用打开时显示",
+                        fontSize = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.floatingWindowModeSelectedOnly,
+                        onCheckedChange = { viewModel.saveFloatingWindowModeSelectedOnly(it) },
+                        enabled = viewModel.floatingWindowEnabled // 只有主开关开启时才可用
+                    )
+                }
+                Text(
+                    "开启此选项后，只有当当前前台应用在“监控应用列表”中时，悬浮窗才会显示内容。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "锁定悬浮窗位置",
+                        fontSize = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Switch(
+                        checked = viewModel.floatingWindowLocked,
+                        onCheckedChange = { viewModel.saveFloatingWindowLocked(it) },
+                        enabled = viewModel.floatingWindowEnabled // 只有主开关开启时才可用
+                    )
+                }
+                Text(
+                    "开启后悬浮窗不可触摸（穿透点击）；关闭后可拖动悬浮窗调整位置（自动保存）。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
