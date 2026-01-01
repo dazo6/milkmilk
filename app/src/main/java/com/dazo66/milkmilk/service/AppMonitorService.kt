@@ -24,19 +24,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.Alignment
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.ViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -394,7 +390,12 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         return try {
             val pm = packageManager
             val info = pm.getApplicationInfo(packageName, 0)
-            pm.getApplicationLabel(info).toString()
+            val appName = pm.getApplicationLabel(info).toString()
+            if (appName.contains('.')) {
+                appName.substring(packageName.lastIndexOf('.') + 1)
+            } else{
+                appName
+            }
         } catch (e: Exception) {
             packageName.substring(packageName.lastIndexOf('.') + 1)
         }
@@ -610,11 +611,9 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         sessionStartTime = now
         
         // 更新悬浮窗（切换到主线程）
-        Handler(Looper.getMainLooper()).post {
-            checkFloatingWindowVisibility()
-            if (isFloatingVisible.value) {
-                updateFloatingWindow(newPackageName)
-            }
+        checkFloatingWindowVisibility()
+        if (isFloatingVisible.value) {
+            updateFloatingWindow(newPackageName)
         }
     }
 
