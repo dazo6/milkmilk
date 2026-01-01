@@ -362,15 +362,17 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                         // 解锁：可触摸（可拖动）
                         params.flags = params.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                     }
-                    
+                    params.flags = params.flags and android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+
                     // 确保内容是最新的
                     if (currentForegroundPkg != null) {
                         floatingTextState.value = getAppName(currentForegroundPkg!!)
                     }
                 } else {
                     // 隐藏时：完全透明，极小尺寸，不可触摸
-                    params.alpha = 0f
-                    params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    params.x = -100
+                    params.y = -200
+                    params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     floatingTextState.value = ""
                 }
                 windowManager?.updateViewLayout(floatingView, params)
