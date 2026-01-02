@@ -7,6 +7,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.app.AppOpsManager
+import android.app.Application
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -524,16 +525,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    fun saveDebugOverlayEnabled(context: Context) {
-        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("debug_overlay_enabled", debugOverlayEnabled).apply()
-    }
-
-    fun saveFloatingWindowEnabled(context: Context) {
-        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        prefs.edit().putBoolean("floating_window_enabled", floatingWindowEnabled).apply()
-    }
-
     // 保存阈值设置
     fun saveThresholds(context: Context) {
         val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -714,26 +705,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    // 导出会话数据到外部文件目录（sessions_export.json）
-    suspend fun exportSessionsToFile(): String {
-        val records =
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { repository.getAllRecordsDirect() }
-        val jsonArray = org.json.JSONArray()
-        records.forEach { r ->
-            val obj = JSONObject()
-            obj.put("packageName", r.packageName)
-            obj.put("appName", r.appName)
-            obj.put("startTime", r.startTime.time)
-            obj.put("endTime", r.endTime.time)
-            obj.put("durationSeconds", r.durationSeconds)
-            obj.put("date", r.date.time)
-            jsonArray.put(obj)
-        }
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        val file = java.io.File(dir, "sessions_export.json")
-        file.writeText(jsonArray.toString())
-        return file.absolutePath
-    }
 
     // 导出会话数据到用户自选位置（SAF Uri）
     suspend fun exportSessionsToUri(uri: android.net.Uri): Boolean {
@@ -757,49 +728,6 @@ class MainViewModel(private val context: Context) : ViewModel() {
         } catch (e: Exception) {
             false
         }
-    }
-
-    // 从外部文件目录导入会话数据（sessions_export.json），检测时间重叠
-    suspend fun importSessionsFromFile(): Pair<Int, Int> {
-        val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        val file = java.io.File(dir, "sessions_export.json")
-        if (!file.exists()) return 0 to 0
-        val text = file.readText()
-        val arr = org.json.JSONArray(text)
-        var success = 0
-        var fail = 0
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val record = AppUsageRecord(
-                packageName = o.getString("packageName"),
-                appName = o.getString("appName"),
-                startTime = Date(o.getLong("startTime")),
-                endTime = Date(o.getLong("endTime")),
-                durationSeconds = o.getLong("durationSeconds"),
-                date = Date(o.getLong("date"))
-            )
-            val overlap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                repository.hasOverlap(
-                    record.startTime,
-                    record.endTime
-                )
-            }
-            if (overlap) {
-                fail++
-            } else {
-                try {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        repository.insertUsageRecord(
-                            record
-                        )
-                    }
-                    success++
-                } catch (e: Exception) {
-                    fail++
-                }
-            }
-        }
-        return success to fail
     }
 
     // 通过文件选择器的Uri导入会话数据
@@ -944,10 +872,18 @@ fun Greeting(name: String, modifier: Modifier = Modifier, viewModel: MainViewMod
         requestPermissionLauncher.launch(permissions.toTypedArray())
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     // 应用从后台恢复时：如果距离上次打开超过3分钟，触发增量刷新
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                // 检查 AppMonitorService 是否正常运行
+                if (AppMonitorService.shouldRestartService(context)) {
+                    Log.i("MainActivity", "检测到 AppMonitorService 状态异常，尝试重启服务")
+                    AppMonitorService.startService(context)
+                }
+                
                 // 无条件刷新事件页展示层
                 vm.forceEventListRefresh()
                 // 同时保留原有：按3分钟阈值决定是否增量重算

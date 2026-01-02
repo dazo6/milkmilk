@@ -74,6 +74,23 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
             val intent = Intent(context, AppMonitorService::class.java)
             context.stopService(intent)
         }
+        
+        // 检查是否需要重启服务
+        fun shouldRestartService(context: Context): Boolean {
+            // 如果服务标记为未运行，或者悬浮窗需要显示但未显示（辅助判断），则建议重启
+            // 这里简单以 isServiceRunning 标记为准，配合 ActivityManager 双重检查
+            if (!isServiceRunning) return true
+            
+            // 可选：通过 ActivityManager 检查服务是否真的在运行
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            @Suppress("DEPRECATION")
+            for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+                if (AppMonitorService::class.java.name == service.service.className) {
+                    return false // 服务正在运行
+                }
+            }
+            return true // 服务未在运行列表里
+        }
     }
 
     private val serviceScope = CoroutineScope(Dispatchers.Default)
