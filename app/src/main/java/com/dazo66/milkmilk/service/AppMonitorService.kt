@@ -264,12 +264,12 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     setViewTreeViewModelStoreOwner(this@AppMonitorService)
                     setViewTreeSavedStateRegistryOwner(this@AppMonitorService)
                     setContent {
-                        if (isFloatingVisible.value) {
+
                             androidx.compose.material3.MaterialTheme {
                                 androidx.compose.foundation.layout.Box(
                                     modifier = Modifier
                                         .padding(top = 6.dp)
-                                        .background(Color.Black, RoundedCornerShape(50))
+                                        .background(if (isFloatingVisible.value) Color.Black else Color(0x09000000), RoundedCornerShape(50))
                                         .padding(horizontal = 16.dp, vertical = 8.dp)
                                 ) {
                                     androidx.compose.material3.Text(
@@ -280,7 +280,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                                     )
                                 }
                             }
-                        }
+
                     }
                 }
                 
@@ -389,7 +389,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     }
                 } else {
                     // 隐藏时：完全透明，极小尺寸，不可触摸
-                    params.alpha = 0.02f
+                    // params.alpha = 0.02f
                     params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     floatingTextState.value = ""
                 }
