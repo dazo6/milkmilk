@@ -1,5 +1,6 @@
 package com.dazo66.milkmilk.service
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -284,7 +285,8 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                 }
                 
                 // 设置触摸监听器实现拖动
-                composeView.setOnTouchListener(object : android.view.View.OnTouchListener {
+                composeView.setOnTouchListener(
+                object : android.view.View.OnTouchListener {
                     private var initialX = 0
                     private var initialY = 0
                     private var initialTouchX = 0f
@@ -387,8 +389,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     }
                 } else {
                     // 隐藏时：完全透明，极小尺寸，不可触摸
-                    params.x = -100
-                    params.y = -200
+                    params.alpha = 0.01f
                     params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     floatingTextState.value = ""
                 }
