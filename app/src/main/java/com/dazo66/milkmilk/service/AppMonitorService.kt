@@ -1,6 +1,5 @@
 package com.dazo66.milkmilk.service
 
-import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,45 +10,44 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.dazo66.milkmilk.AppUsageRepository
-import com.dazo66.milkmilk.MainActivity
-import com.dazo66.milkmilk.R
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.ComposeView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.lifecycle.setViewTreeLifecycleOwner
-import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ViewModelStore
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.dazo66.milkmilk.AppUsageRepository
+import com.dazo66.milkmilk.MainActivity
+import com.dazo66.milkmilk.R
+import com.dazo66.milkmilk.utils.LogRecorder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.util.Calendar
-import com.dazo66.milkmilk.utils.LogRecorder
-
-import android.os.Handler
-import android.os.Looper
 
 /**
  * 应用监控前台服务，确保应用在后台稳定运行
  */
-class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx.lifecycle.ViewModelStoreOwner, androidx.savedstate.SavedStateRegistryOwner {
+class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner,
+    androidx.lifecycle.ViewModelStoreOwner, androidx.savedstate.SavedStateRegistryOwner {
     companion object {
         private const val TAG = "AppMonitorService"
         private const val NOTIFICATION_CHANNEL_ID = "app_monitor_channel"
@@ -75,15 +73,16 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
             val intent = Intent(context, AppMonitorService::class.java)
             context.stopService(intent)
         }
-        
+
         // 检查是否需要重启服务
         fun shouldRestartService(context: Context): Boolean {
             // 如果服务标记为未运行，或者悬浮窗需要显示但未显示（辅助判断），则建议重启
             // 这里简单以 isServiceRunning 标记为准，配合 ActivityManager 双重检查
             if (!isServiceRunning) return true
-            
+
             // 可选：通过 ActivityManager 检查服务是否真的在运行
-            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val manager =
+                context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
             @Suppress("DEPRECATION")
             for (service in manager.getRunningServices(Int.MAX_VALUE)) {
                 if (AppMonitorService::class.java.name == service.service.className) {
@@ -110,33 +109,42 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
     // 悬浮窗相关
     private var windowManager: android.view.WindowManager? = null
     private var floatingView: android.view.View? = null
+
     // Compose 状态
     private var floatingTextState = androidx.compose.runtime.mutableStateOf("Waiting...")
     private var isFloatingVisible = androidx.compose.runtime.mutableStateOf(true)
-    
+
     // Lifecycle components for ComposeView
     private val lifecycleRegistry by lazy { LifecycleRegistry(this) }
     private val savedStateRegistryController by lazy { SavedStateRegistryController.create(this) }
     private val viewModelStoreInternal by lazy { ViewModelStore() }
-    
+
     // 主线程 Handler
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     // 配置监听
-    private val prefsChangeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-        if (key == "floating_window_enabled" || key == "floating_window_mode_selected_only" || key == "floating_window_locked") {
-            mainHandler.post { checkFloatingWindowVisibility() }
+    private val prefsChangeListener =
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (key == "floating_window_enabled" || key == "floating_window_mode_selected_only" || key == "floating_window_locked" || key == "floating_window_show_app_name") {
+                mainHandler.post { checkFloatingWindowVisibility() }
+            }
         }
-    }
 
     private fun checkFloatingWindowVisibility() {
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        val enabled = prefs.getBoolean("floating_window_enabled", false)
+        val showAppName = prefs.getBoolean("floating_window_show_app_name", true)
         val selectedOnly = prefs.getBoolean("floating_window_mode_selected_only", false)
-        val locked = prefs.getBoolean("floating_window_locked", true) // 读取锁定状态
+        val locked = prefs.getBoolean("floating_window_locked", false) // 读取锁定状态
+        val enable = prefs.getBoolean("floating_window_enabled", true) // 读取锁定状态
+
+        if (!enable) {
+            setFloatingWindowVisibility(false)
+            return
+        }
+
 
         var shouldBeVisible = false
-        if (enabled) {
+        if (showAppName) {
             if (selectedOnly) {
                 val monitored = monitoredPackages()
                 if (currentForegroundPkg != null && monitored.contains(currentForegroundPkg)) {
@@ -146,7 +154,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                 shouldBeVisible = true
             }
         }
-        
+
         // 强制更新可见性以应用可能的 flag 变化（如锁定状态改变）
         setFloatingWindowVisibility(shouldBeVisible)
     }
@@ -159,18 +167,18 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        
+
         Log.d(TAG, "服务创建")
         isServiceRunning = true
         repository = AppUsageRepository(this)
-        
+
         // 注册配置监听
         val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
         prefs.registerOnSharedPreferenceChangeListener(prefsChangeListener)
 
         // 创建通知渠道
         createNotificationChannel()
-        
+
         // 初始化悬浮窗
         checkFloatingWindowVisibility()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
@@ -203,10 +211,10 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         super.onDestroy()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
         Log.d(TAG, "服务销毁")
-        
+
         getSharedPreferences("app_settings", Context.MODE_PRIVATE)
             .unregisterOnSharedPreferenceChangeListener(prefsChangeListener)
-            
+
         isServiceRunning = false
         dailySummaryJob?.cancel()
         usageMonitorJob?.cancel()
@@ -234,7 +242,8 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         if (!Settings.canDrawOverlays(this)) return
         try {
             if (windowManager == null) {
-                windowManager = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+                windowManager =
+                    getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
             }
             if (floatingView == null) {
                 val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
@@ -258,73 +267,88 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     y = savedY
                     windowAnimations = 0 // 禁用窗口动画
                 }
-                
+
                 val composeView = ComposeView(this).apply {
                     setViewTreeLifecycleOwner(this@AppMonitorService)
                     setViewTreeViewModelStoreOwner(this@AppMonitorService)
                     setViewTreeSavedStateRegistryOwner(this@AppMonitorService)
                     setContent {
-
-                            androidx.compose.material3.MaterialTheme {
-                                androidx.compose.foundation.layout.Box(
-                                    modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .background(if (isFloatingVisible.value) Color.Black else Color(0x09000000), RoundedCornerShape(50))
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    androidx.compose.material3.Text(
-                                        text = floatingTextState.value,
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        maxLines = 1
+                        androidx.compose.material3.MaterialTheme {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .padding(top = 6.dp)
+                                    .background(
+                                        if (isFloatingVisible.value) Color.Black else Color(
+                                            0x01000000
+                                        ), RoundedCornerShape(50)
                                     )
-                                }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                androidx.compose.material3.Text(
+                                    text = floatingTextState.value,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
                             }
+                        }
 
                     }
                 }
-                
+
                 // 设置触摸监听器实现拖动
                 composeView.setOnTouchListener(
-                object : android.view.View.OnTouchListener {
-                    private var initialX = 0
-                    private var initialY = 0
-                    private var initialTouchX = 0f
-                    private var initialTouchY = 0f
+                    object : android.view.View.OnTouchListener {
+                        private var initialX = 0
+                        private var initialY = 0
+                        private var initialTouchX = 0f
+                        private var initialTouchY = 0f
 
-                    override fun onTouch(v: android.view.View, event: android.view.MotionEvent): Boolean {
-                        val locked = getSharedPreferences("app_settings", Context.MODE_PRIVATE).getBoolean("floating_window_locked", true)
-                        if (locked) return false 
+                        override fun onTouch(
+                            v: android.view.View,
+                            event: android.view.MotionEvent
+                        ): Boolean {
+                            val locked = getSharedPreferences(
+                                "app_settings",
+                                Context.MODE_PRIVATE
+                            ).getBoolean("floating_window_locked", true)
+                            if (locked) return false
 
-                        when (event.action) {
-                            android.view.MotionEvent.ACTION_DOWN -> {
-                                val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
-                                if (params != null) {
-                                    initialX = params.x
-                                    initialY = params.y
-                                    initialTouchX = event.rawX
-                                    initialTouchY = event.rawY
+                            when (event.action) {
+                                android.view.MotionEvent.ACTION_DOWN -> {
+                                    val params =
+                                        floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
+                                    if (params != null) {
+                                        initialX = params.x
+                                        initialY = params.y
+                                        initialTouchX = event.rawX
+                                        initialTouchY = event.rawY
+                                    }
+                                    return true // 消费事件
                                 }
-                                return true // 消费事件
+
+                                android.view.MotionEvent.ACTION_MOVE -> {
+                                    val params =
+                                        floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
+                                            ?: return false
+                                    params.x = initialX + (event.rawX - initialTouchX).toInt()
+                                    params.y = initialY + (event.rawY - initialTouchY).toInt()
+                                    windowManager?.updateViewLayout(floatingView, params)
+                                    return true
+                                }
+
+                                android.view.MotionEvent.ACTION_UP -> {
+                                    val params =
+                                        floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
+                                    if (params != null) {
+                                        saveFloatingWindowPosition(params.x, params.y)
+                                    }
+                                    return true
+                                }
                             }
-                            android.view.MotionEvent.ACTION_MOVE -> {
-                                val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams ?: return false
-                                params.x = initialX + (event.rawX - initialTouchX).toInt()
-                                params.y = initialY + (event.rawY - initialTouchY).toInt()
-                                windowManager?.updateViewLayout(floatingView, params)
-                                return true
-                            }
-                            android.view.MotionEvent.ACTION_UP -> {
-                                 val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
-                                 if (params != null) {
-                                     saveFloatingWindowPosition(params.x, params.y)
-                                 }
-                                 return true
-                            }
+                            return false
                         }
-                        return false
-                    }
-                })
+                    })
 
                 floatingView = composeView
                 windowManager?.addView(floatingView, layoutParams)
@@ -352,13 +376,21 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         }
 
         isFloatingVisible.value = visible
+        val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("floating_window_enabled", false)) {
+            removeFloatingWindow()
+            return
+        }
 
         // 确保悬浮窗已初始化
         if (floatingView == null) {
             initFloatingWindow()
         }
-        
-        val locked = getSharedPreferences("app_settings", Context.MODE_PRIVATE).getBoolean("floating_window_locked", true)
+
+        val locked = getSharedPreferences(
+            "app_settings",
+            Context.MODE_PRIVATE
+        ).getBoolean("floating_window_locked", true)
 
         try {
             val params = floatingView?.layoutParams as? android.view.WindowManager.LayoutParams
@@ -368,7 +400,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     params.alpha = 1f
                     params.width = android.view.WindowManager.LayoutParams.WRAP_CONTENT
                     params.height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
-                    
+
                     // 强制同步位置，防止布局重置导致的跳变
                     val prefs = getSharedPreferences("app_settings", Context.MODE_PRIVATE)
                     params.x = prefs.getInt("floating_window_x", 0)
@@ -376,12 +408,15 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
 
                     if (locked) {
                         // 锁定：不可触摸（穿透）
-                        params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        params.flags =
+                            params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
                     } else {
                         // 解锁：可触摸（可拖动）
-                        params.flags = params.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+                        params.flags =
+                            params.flags and android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
                     }
-                    params.flags = params.flags and android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
+                    params.flags =
+                        params.flags and android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS.inv()
 
                     // 确保内容是最新的
                     if (currentForegroundPkg != null) {
@@ -390,7 +425,8 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                 } else {
                     // 隐藏时：完全透明，极小尺寸，不可触摸
                     // params.alpha = 0.02f
-                    params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                    params.flags =
+                        params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     floatingTextState.value = ""
                 }
                 windowManager?.updateViewLayout(floatingView, params)
@@ -413,7 +449,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
             val appName = pm.getApplicationLabel(info).toString()
             if (appName.contains('.')) {
                 appName.substring(packageName.lastIndexOf('.') + 1)
-            } else{
+            } else {
                 appName
             }
         } catch (e: Exception) {
@@ -436,7 +472,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
             // 将包名转换为应用名
             floatingTextState.value = getAppName(text)
         }
-        
+
         if (floatingView == null) {
             initFloatingWindow()
         }
@@ -454,11 +490,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         try {
             if (floatingView != null && windowManager != null) {
                 // 检查 View 是否已附加到窗口（仅限 API 19+）
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                    if (floatingView!!.isAttachedToWindow) {
-                        windowManager?.removeView(floatingView)
-                    }
-                } else {
+                if (floatingView!!.isAttachedToWindow) {
                     windowManager?.removeView(floatingView)
                 }
                 floatingView = null
@@ -540,7 +572,10 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     val pkg = getForegroundAppByUsageEvents()
                     if (pkg != null && pkg != currentForegroundPkg) {
                         Log.i(TAG, "监听到应用变化$currentForegroundPkg -> $pkg")
-                        LogRecorder.record(this@AppMonitorService, "监听到应用变化$currentForegroundPkg -> $pkg")
+                        LogRecorder.record(
+                            this@AppMonitorService,
+                            "监听到应用变化$currentForegroundPkg -> $pkg"
+                        )
                         handleAppSwitch(pkg)
                     }
 
@@ -580,28 +615,6 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
     }
 
     /**
-     * 无障碍服务是否已启用（检查本应用的服务）
-     */
-    private fun isAccessibilityEnabled(): Boolean {
-        return try {
-            val serviceName = packageName + ".MyAccessibilityService"
-            val enabled =
-                Settings.Secure.getInt(contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0)
-            if (enabled == 1) {
-                val enabledServices = Settings.Secure.getString(
-                    contentResolver,
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-                )
-                enabledServices?.contains(serviceName) == true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    /**
      * 监控应用列表（从 SharedPreferences 读取）
      */
     private fun monitoredPackages(): Set<String> {
@@ -629,7 +642,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         // 更新当前应用
         currentForegroundPkg = newPackageName
         sessionStartTime = now
-        
+
         // 更新悬浮窗（切换到主线程）
         checkFloatingWindowVisibility()
         if (isFloatingVisible.value) {
@@ -726,72 +739,4 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
         }
     }
 
-    /**
-     * 安排每日统计任务
-     */
-    private fun scheduleDailySummary() {
-        dailySummaryJob = serviceScope.launch {
-            while (isActive) {
-                // 计算到明天0点的时间
-                val now = Calendar.getInstance()
-                val nextDay = Calendar.getInstance().apply {
-                    add(Calendar.DAY_OF_MONTH, 1)
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }
-                val delayMillis = nextDay.timeInMillis - now.timeInMillis
-
-                // 等待到明天0点
-                delay(delayMillis)
-
-                // 每天执行一次
-                delay(24 * 60 * 60 * 1000)
-            }
-        }
-    }
-
-    /**
-     * 生成每日统计并发送通知
-     */
-    private fun generateDailySummary() {
-        repository?.let { repo ->
-            serviceScope.launch {
-                try {
-                    // 获取今日使用统计（使用非LiveData版本）
-                    val todaySummary = repo.getTodayUsageSummaryDirect()
-
-                    if (todaySummary.isNotEmpty()) {
-                        // 计算总使用时间
-                        val totalUsageTime =
-                            todaySummary.sumOf { it.totalDuration } / 60000 // 转换为分钟
-
-                        // 找出使用最多的应用
-                        val mostUsedApp = todaySummary.maxByOrNull { it.totalDuration }
-
-                        if (mostUsedApp != null) {
-                            // 发送每日统计通知
-                            val appName = try {
-                                packageManager.getApplicationInfo(mostUsedApp.packageName, 0)
-                                    .loadLabel(packageManager).toString()
-                            } catch (e: Exception) {
-                                mostUsedApp.packageName
-                            }
-
-                            com.dazo66.milkmilk.notification.NotificationHelper.sendDailySummaryNotification(
-                                context = this@AppMonitorService,
-                                totalApps = todaySummary.size,
-                                totalUsageTime = totalUsageTime.toInt(),
-                                mostUsedApp = appName,
-                                mostUsedTime = (mostUsedApp.totalDuration / 60000).toInt()
-                            )
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "生成每日统计失败", e)
-                }
-            }
-        }
-    }
 }
