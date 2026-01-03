@@ -389,7 +389,7 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner, androidx
                     }
                 } else {
                     // 隐藏时：完全透明，极小尺寸，不可触摸
-                    params.alpha = 0.01f
+                    params.alpha = 0.02f
                     params.flags = params.flags or android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                     floatingTextState.value = ""
                 }
