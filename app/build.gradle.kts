@@ -119,4 +119,7 @@ dependencies {
     implementation("androidx.paging:paging-runtime-ktx:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
 
+    // 后台补采 UsageEvents；实时监控服务被系统终止时仍可恢复近期会话。
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
 }

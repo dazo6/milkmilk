@@ -112,6 +112,8 @@ class MainActivity : ComponentActivity() {
 
         // 启动监控服务
         AppMonitorService.startService(this)
+        // 常驻服务负责实时监控；Worker 负责在其被终止后补采系统保留的使用事件。
+        UsageRecoveryScheduler.schedule(this)
 
         setContent {
             MilkmilkTheme {
@@ -1377,6 +1379,35 @@ fun SettingsTab(viewModel: MainViewModel) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        // 后台保活设置
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("后台保活", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "已启用每 15 分钟一次的使用记录补采。若系统结束实时监控服务，近期会话会在下次补采时恢复。"
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "部分手机还需要允许自启动和不受电池限制。将尝试打开本机的自启动管理；不支持时会转到应用详情页。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { AutoStartSettings.open(context) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("打开自启动管理")
+                }
             }
         }
 

@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.dazo66.milkmilk.service.AppMonitorService
+import com.dazo66.milkmilk.UsageRecoveryScheduler
 
 /**
  * 启动接收器，用于在设备启动完成后自动启动应用监控服务
@@ -16,13 +16,11 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            Log.d(TAG, "设备启动完成，准备启动应用监控服务")
-
-            // 以普通后台服务方式启动，避免在 BOOT_COMPLETED 触发前台服务限制
-            val serviceIntent = Intent(context, AppMonitorService::class.java).apply {
-                putExtra("start_mode", "boot")
-            }
-            context.startService(serviceIntent)
+            Log.d(TAG, "设备启动完成，安排使用记录补采")
+            // Android 8+ 不允许可靠地从开机广播启动普通后台服务；前台服务的
+            // 后台启动同样受限。先补采系统保存的 UsageEvents，实时服务在用户
+            // 下次打开应用后再由明确的用户交互启动。
+            UsageRecoveryScheduler.schedule(context)
         }
     }
 }
