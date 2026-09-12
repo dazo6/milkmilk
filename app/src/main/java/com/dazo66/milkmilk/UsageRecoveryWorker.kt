@@ -17,8 +17,8 @@ import java.util.concurrent.TimeUnit
 /**
  * 从 UsageEvents 重建近期已结束的会话。
  *
- * WorkManager 并非精确定时器；因此每次都回看三天并通过数据库的时间重叠校验
- * 去重。系统只承诺 UsageEvents 保留"几天"，不能把此机制当作长期离线补偿。
+ * WorkManager 并非精确定时器；每次最多回看三天。删除墓碑也只保留三天，
+ * 两者窗口保持一致，既能尊重用户删除，又不会长期积累标记。
  */
 class UsageRecoveryWorker(
     appContext: Context,
@@ -36,22 +36,28 @@ class UsageRecoveryWorker(
 
         return try {
             val now = System.currentTimeMillis()
+            val repository = AppUsageRepository(applicationContext)
+            val queryStart = maxOf(now - LOOKBACK_MILLIS, repository.recoveryIgnoreBefore())
+            repository.pruneRecoveryTombstones(now - LOOKBACK_MILLIS)
             val events = (applicationContext.getSystemService(Context.USAGE_STATS_SERVICE)
                     as UsageStatsManager)
-                .queryEvents(now - LOOKBACK_MILLIS, now)
+                .queryEvents(queryStart, now)
             val recovered = reconstructSessions(events, monitoredPackages)
-            val repository = AppUsageRepository(applicationContext)
             var inserted = 0
 
             for (session in recovered) {
-                if (!repository.hasOverlap(Date(session.startTime), Date(session.endTime))) {
+                val startTime = Date(session.startTime)
+                val endTime = Date(session.endTime)
+                if (!repository.hasOverlap(startTime, endTime) &&
+                    !repository.isRecoverySuppressed(session.packageName, startTime, endTime)
+                ) {
                     val appName = appName(session.packageName)
                     repository.insertUsageRecord(
                         AppUsageRecord(
                             packageName = session.packageName,
                             appName = appName,
-                            startTime = Date(session.startTime),
-                            endTime = Date(session.endTime),
+                            startTime = startTime,
+                            endTime = endTime,
                             durationSeconds = (session.endTime - session.startTime) / 1_000,
                             date = Date(session.endTime)
                         )

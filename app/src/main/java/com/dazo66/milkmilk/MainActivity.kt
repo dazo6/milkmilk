@@ -802,7 +802,7 @@ class MainViewModel(private val context: Context) : ViewModel() {
         recordToDelete?.let { record ->
             try {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    repository.deleteRecord(record.id)
+                    repository.deleteRecord(record)
                 }
                 // 删除完成后：触发局部重算（聚合取上下7天，仅写入后3天）
                 val monitoredPkgs = monitoredApps.map { it.packageName }

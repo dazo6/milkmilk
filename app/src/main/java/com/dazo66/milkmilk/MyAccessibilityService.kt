@@ -192,6 +192,15 @@ class MyAccessibilityService : AccessibilityService() {
                 )
                 kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
                     try {
+                        if (repository.isRecoverySuppressed(
+                                packageName,
+                                record.startTime,
+                                record.endTime
+                            )
+                        ) {
+                            Log.i(TAG, "会话已被用户删除，跳过无障碍服务延迟写入：$packageName")
+                            return@launch
+                        }
                         repository.insertUsageRecord(record)
                         // 新增实时数据后执行3天窗口增量更新（取7天事件）
                         val monitoredPackages = monitoredApps.toList()

@@ -678,6 +678,15 @@ class AppMonitorService : Service(), androidx.lifecycle.LifecycleOwner,
                     durationSeconds = durationSeconds,
                     date = java.util.Date(endTime)
                 )
+                if (repository?.isRecoverySuppressed(
+                        packageName,
+                        record.startTime,
+                        record.endTime
+                    ) == true
+                ) {
+                    Log.i(TAG, "会话已被用户删除，跳过延迟写入：$packageName")
+                    return@launch
+                }
                 repository?.insertUsageRecord(record)
                 // 增量聚合更新：以开始时间为索引窗口
                 repository?.incrementalUpdateAround(record.startTime, monitored.toList())

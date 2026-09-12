@@ -4,11 +4,19 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
+import androidx.room.withTransaction
 import java.util.Date
 
 class AppUsageRepository(context: Context) {
-    private val appUsageDao = AppDatabase.getDatabase(context).appUsageDao()
-    private val aggregatedBehaviorDao = AppDatabase.getDatabase(context).aggregatedBehaviorDao()
+    private val appContext = context.applicationContext
+    private val database = AppDatabase.getDatabase(appContext)
+    private val appUsageDao = database.appUsageDao()
+    private val aggregatedBehaviorDao = database.aggregatedBehaviorDao()
+    private val deletedUsageSessionDao = database.deletedUsageSessionDao()
+    private val recoveryPreferences = appContext.getSharedPreferences(
+        RECOVERY_PREFERENCES,
+        Context.MODE_PRIVATE
+    )
 
     // 插入使用记录
     suspend fun insertUsageRecord(record: AppUsageRecord) {
@@ -153,15 +161,50 @@ class AppUsageRepository(context: Context) {
         return appUsageDao.countOverlappingSessions(startTime, endTime) > 0
     }
 
-    // 新增：删除单条记录
-    suspend fun deleteRecord(recordId: Long) {
-        appUsageDao.deleteRecord(recordId)
+    /** 删除记录并保留短期墓碑，防止仍存在于 UsageEvents 中的同一会话被补回。 */
+    suspend fun deleteRecord(record: AppUsageRecord) {
+        database.withTransaction {
+            deletedUsageSessionDao.insert(
+                DeletedUsageSession(
+                    packageName = record.packageName,
+                    startTime = record.startTime,
+                    endTime = record.endTime
+                )
+            )
+            appUsageDao.deleteRecord(record.id)
+        }
     }
 
-    // 新增：清空全部记录
+    /**
+     * 清空数据后忽略清空时刻之前的系统事件；否则 Worker 的三天回看窗口会把
+     * 已清空的数据重新写入。
+     */
     suspend fun deleteAllRecords() {
-        appUsageDao.deleteAllRecords()
-        aggregatedBehaviorDao.clearAllAggregations()
+        database.withTransaction {
+            appUsageDao.deleteAllRecords()
+            aggregatedBehaviorDao.clearAllAggregations()
+        }
+        recoveryPreferences.edit()
+            .putLong(RECOVERY_IGNORE_BEFORE, System.currentTimeMillis())
+            .apply()
+    }
+
+    suspend fun isRecoverySuppressed(
+        packageName: String,
+        startTime: Date,
+        endTime: Date
+    ): Boolean {
+        return deletedUsageSessionDao.countOverlappingTombstones(
+            packageName,
+            startTime,
+            endTime
+        ) > 0
+    }
+
+    fun recoveryIgnoreBefore(): Long = recoveryPreferences.getLong(RECOVERY_IGNORE_BEFORE, 0L)
+
+    suspend fun pruneRecoveryTombstones(cutoff: Long) {
+        deletedUsageSessionDao.deleteBefore(Date(cutoff))
     }
 
     // 行为聚合服务
@@ -357,3 +400,6 @@ class AppUsageRepository(context: Context) {
         AggregationEvents.notifyUpdated()
     }
 }
+
+private const val RECOVERY_PREFERENCES = "usage_recovery"
+private const val RECOVERY_IGNORE_BEFORE = "ignore_before"
