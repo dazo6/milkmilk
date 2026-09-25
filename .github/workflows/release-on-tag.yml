@@ -23,7 +23,8 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        # v5 在当前 GitHub 托管 Runner 上以退出码 126 失败；v4 已在同一环境验证可用。
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
