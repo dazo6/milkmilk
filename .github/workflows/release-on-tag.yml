@@ -20,17 +20,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install Android SDK components (API 35)
         run: |
@@ -43,14 +43,11 @@ jobs:
         run: |
           echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.keystore"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
       - name: Build APKs (release & debug)
-        uses: gradle/gradle-build-action@v3
-        with:
-          arguments: |
-            clean
-            assembleRelease
-            assembleDebug
-            test
+        run: ./gradlew clean assembleRelease assembleDebug test --no-daemon
         env:
           # 动态版本注入：使用 tag 作为 versionName，run_number 作为 versionCode
           VERSION_NAME: ${{ github.ref_name }}
