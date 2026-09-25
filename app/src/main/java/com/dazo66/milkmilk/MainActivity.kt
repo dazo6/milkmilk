@@ -758,25 +758,14 @@ class MainViewModel(private val context: Context) : ViewModel() {
                 durationSeconds = o.getLong("durationSeconds"),
                 date = Date(o.getLong("date"))
             )
-            val overlap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                repository.hasOverlap(
-                    record.startTime,
-                    record.endTime
-                )
-            }
-            if (overlap) {
-                fail++
-            } else {
-                try {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        repository.insertUsageRecord(
-                            record
-                        )
-                    }
-                    success++
-                } catch (e: Exception) {
-                    fail++
+            try {
+                // 与实时采集和后台补采保持一致：重叠记录由仓库层合并，而非丢弃。
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    repository.insertUsageRecord(record)
                 }
+                success++
+            } catch (e: Exception) {
+                fail++
             }
         }
         // 导入完成后触发全量重算并批量落库

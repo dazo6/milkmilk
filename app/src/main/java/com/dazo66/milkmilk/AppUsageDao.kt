@@ -11,7 +11,7 @@ import java.util.Date
 @Dao
 interface AppUsageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(record: AppUsageRecord)
+    suspend fun insert(record: AppUsageRecord): Long
 
     @Query("SELECT * FROM app_usage_records WHERE packageName = :packageName ORDER BY startTime DESC")
     fun getAppUsageRecords(packageName: String): LiveData<List<AppUsageRecord>>
@@ -53,6 +53,23 @@ interface AppUsageDao {
     // 新增：检测时间区间是否与已有会话重叠（用于导入校验）
     @Query("SELECT COUNT(*) FROM app_usage_records WHERE startTime < :endTime AND endTime > :startTime")
     suspend fun countOverlappingSessions(startTime: Date, endTime: Date): Int
+
+    /** 查询同一应用、且与给定时间段有实际交集的会话。 */
+    @Query("""
+        SELECT * FROM app_usage_records
+        WHERE packageName = :packageName
+          AND startTime < :endTime
+          AND endTime > :startTime
+        ORDER BY startTime ASC
+    """)
+    suspend fun getOverlappingSessions(
+        packageName: String,
+        startTime: Date,
+        endTime: Date
+    ): List<AppUsageRecord>
+
+    @Query("DELETE FROM app_usage_records WHERE id IN (:recordIds)")
+    suspend fun deleteRecords(recordIds: List<Long>)
 
     // 新增：删除单条记录（通过ID）
     @Query("DELETE FROM app_usage_records WHERE id = :recordId")

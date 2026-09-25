@@ -201,10 +201,10 @@ class MyAccessibilityService : AccessibilityService() {
                             Log.i(TAG, "会话已被用户删除，跳过无障碍服务延迟写入：$packageName")
                             return@launch
                         }
-                        repository.insertUsageRecord(record)
+                        val savedRecord = repository.insertUsageRecord(record)
                         // 新增实时数据后执行3天窗口增量更新（取7天事件）
                         val monitoredPackages = monitoredApps.toList()
-                        repository.incrementalUpdateAround(record.startTime, monitoredPackages)
+                        repository.incrementalUpdateAround(savedRecord.startTime, monitoredPackages)
                     } catch (e: Exception) {
                         Log.e("MyAccessibilityService", "保存会话记录失败", e)
                     }

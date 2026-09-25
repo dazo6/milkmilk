@@ -18,9 +18,59 @@ class AppUsageRepository(context: Context) {
         Context.MODE_PRIVATE
     )
 
-    // 插入使用记录
-    suspend fun insertUsageRecord(record: AppUsageRecord) {
-        appUsageDao.insert(record)
+    /**
+     * 写入会话，并与同一应用的重叠会话合并。
+     *
+     * 服务实时采集、无障碍服务和 UsageEvents 补采可能会描述同一次前台使用。
+     * 因此不能仅跳过新记录：要将所有相交区间收敛为一个 [最早开始, 最晚结束]
+     * 的会话，避免时长被重复统计。
+     */
+    suspend fun insertUsageRecord(record: AppUsageRecord): AppUsageRecord = database.withTransaction {
+        var mergedStart = record.startTime
+        var mergedEnd = record.endTime
+        val overlappingIds = linkedSetOf<Long>()
+
+        // 新边界扩张后可能再碰到下一条记录，例如 [0, 5]、[4, 8]、[7, 10]。
+        // 循环直到找全该连通的重叠区间。
+        while (true) {
+            val overlaps = appUsageDao.getOverlappingSessions(
+                record.packageName,
+                mergedStart,
+                mergedEnd
+            )
+            val previousCount = overlappingIds.size
+            overlaps.forEach { existing ->
+                overlappingIds += existing.id
+                if (existing.startTime < mergedStart) mergedStart = existing.startTime
+                if (existing.endTime > mergedEnd) mergedEnd = existing.endTime
+            }
+            if (overlappingIds.size == previousCount) break
+        }
+
+        // 已有单条记录完全覆盖本次写入时无需重写，以保留其 ID 并避免无效更新。
+        if (overlappingIds.size == 1) {
+            val existing = appUsageDao.getOverlappingSessions(
+                record.packageName,
+                mergedStart,
+                mergedEnd
+            ).singleOrNull()
+            if (existing != null && existing.startTime == mergedStart && existing.endTime == mergedEnd) {
+                return@withTransaction existing
+            }
+        }
+
+        if (overlappingIds.isNotEmpty()) {
+            appUsageDao.deleteRecords(overlappingIds.toList())
+        }
+        val mergedRecord = record.copy(
+            id = 0,
+            startTime = mergedStart,
+            endTime = mergedEnd,
+            durationSeconds = (mergedEnd.time - mergedStart.time) / 1_000,
+            date = mergedEnd
+        )
+        val id = appUsageDao.insert(mergedRecord)
+        mergedRecord.copy(id = id)
     }
 
     // 获取特定应用的使用记录

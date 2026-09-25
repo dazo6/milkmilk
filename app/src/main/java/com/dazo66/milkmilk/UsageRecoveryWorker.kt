@@ -48,9 +48,7 @@ class UsageRecoveryWorker(
             for (session in recovered) {
                 val startTime = Date(session.startTime)
                 val endTime = Date(session.endTime)
-                if (!repository.hasOverlap(startTime, endTime) &&
-                    !repository.isRecoverySuppressed(session.packageName, startTime, endTime)
-                ) {
+                if (!repository.isRecoverySuppressed(session.packageName, startTime, endTime)) {
                     val appName = appName(session.packageName)
                     repository.insertUsageRecord(
                         AppUsageRecord(
