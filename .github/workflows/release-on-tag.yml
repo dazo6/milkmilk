@@ -48,7 +48,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build APKs (release & debug)
-        run: ./gradlew clean assembleRelease assembleDebug test --no-daemon
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean assembleRelease assembleDebug test --no-daemon
         env:
           # 动态版本注入：使用 tag 作为 versionName，run_number 作为 versionCode
           VERSION_NAME: ${{ github.ref_name }}
